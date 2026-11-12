@@ -100,7 +100,7 @@ apps/client/src/         React UI and validated API client
   components/           Setup, capture, compositor, mixer, recording and recovery panels
   media/                Device/capture, compositor, audio mixer, recorder, chunk pipeline/transport,
                         durable recording coordinator and recovery client
-  ui/                   Design tokens and reusable UI primitives (see UX_DESIGN.md)
+  ui/                   Electric Violet design tokens and reusable UI primitives (see UX_DESIGN.md and ELECTRIC_VIOLET_UX_REDESIGN.md)
 apps/server/src/         Express composition, security middleware and loopback lifecycle
   routes/               HTTP handlers
   services/             Capabilities, sessions, chunk ingestion, finalization, recovery,
