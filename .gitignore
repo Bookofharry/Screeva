@@ -1,0 +1,17 @@
+node_modules/
+dist/
+data/
+coverage/
+playwright-report/
+test-results/
+.local/
+.env
+.env.*
+*.log
+*.sqlite*
+*.db
+*.webm
+*.mp4
+*.wav
+*.part
+*.tsbuildinfo
