@@ -1,7 +1,7 @@
-# Local Creator Recorder — Product Requirements Document
+# Screeva — Product Requirements Document
 
-> Status: Draft product specification. Phase 1 and Phase 2 input setup, sustained capture/preview, canvas composition, audio mixing/meters and bounded in-memory WebM recording are implemented; Phase 3 durable chunked recording, finalization and acknowledged-chunk recovery are implemented, with real-FFprobe acceptance and failure-injection tests still open. See TASKS.md for verified progress and synthetic versus hardware verification limits. Version 0.1 — updated 2026-11-11.  
-> Working name: Local Creator Recorder (rename before release).  
+> Status: Draft product specification. Phase 1 and Phase 2 input setup, sustained capture/preview, canvas composition, audio mixing/meters and bounded in-memory WebM recording are implemented; Phase 3 durable chunked recording, finalization and acknowledged-chunk recovery are implemented, with real-FFprobe acceptance and failure-injection tests still open. See TASKS.md for verified progress and synthetic versus hardware verification limits. Version 0.1 — updated 2026-11-12.  
+> Working brand: Screeva (display wordmark: `screeva.`, tagline: `Your Screen. Your Studio.`; formerly Local Creator Recorder; trademark/domain clearance pending).  
 > Audience: Developers, educators, tutors, creators.  
 > Platform: Windows first, Chrome and Edge; browser UI with a local Node.js server.
 

@@ -21,9 +21,9 @@ export const DEFAULT_STUDIO_VIEW: StudioViewDefinition = {
   label: 'Studio',
   hash: '#studio',
   icon: 'screen',
-  eyebrow: 'RECORDING STUDIO',
-  heading: 'A local home for your next recording.',
-  description: 'Choose your inputs, compose the scene, then record either a temporary preview or an acknowledged local session. Durable completion is shown only after the local service finalizes the WebM.',
+  eyebrow: 'SCREEVA STUDIO',
+  heading: 'Your Screen. Your Studio.',
+  description: 'A modern, local-first screen and webcam recording studio for creators, developers, and educators.',
 };
 
 export const STUDIO_VIEWS: readonly StudioViewDefinition[] = [
@@ -53,7 +53,7 @@ export const STUDIO_VIEWS: readonly StudioViewDefinition[] = [
     icon: 'book',
     eyebrow: 'DOCUMENTATION & WORKFLOWS',
     heading: 'Guides & reference documentation.',
-    description: 'Learn how Local Creator Recorder captures sources, composites scenes, saves crash-safe sessions, and protects local-only privacy.',
+    description: 'Learn how Screeva captures sources, composites scenes, saves crash-safe sessions, and protects local-only privacy.',
   },
   {
     id: 'settings',

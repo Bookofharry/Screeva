@@ -1,6 +1,8 @@
-# Local Creator Recorder
+# Screeva
 
-A local-first screen and webcam recorder **under development**. This checkout implements Phase 1, Phase 2 and most of Phase 3: permission checks, device selectors, sustained screen/camera/microphone capture, live previews/cleanup, canvas composition, local microphone/display-audio mixing, short in-memory WebM recording, durable chunked WebM recording to the local server with FFprobe-validated finalization, and best-effort recovery of server-acknowledged chunks after an interruption. Finalization and salvage require a trusted FFprobe binary. MP4 export, face tracking and focus zoom are not implemented. See TASKS.md for exactly what has been verified. The product name is a working title, not a trademark-clearance claim.
+> **screeva.** — *Your Screen. Your Studio.*
+
+A modern, local-first screen and webcam recording studio for creators, developers, and educators (**under development**). This checkout implements Phase 1, Phase 2 and most of Phase 3: permission checks, device selectors, sustained screen/camera/microphone capture, live previews/cleanup, canvas composition, local microphone/display-audio mixing, short in-memory WebM recording, durable chunked WebM recording to the local server with FFprobe-validated finalization, and best-effort recovery of server-acknowledged chunks after an interruption. Finalization and salvage require a trusted FFprobe binary. MP4 export, face tracking and focus zoom are not implemented. See TASKS.md for exactly what has been verified. **Screeva** is the working brand name (formerly *Local Creator Recorder*; internal workspace package and API capability names remain unchanged for stability, and trademark/domain clearance is not claimed).
 
 ## Windows setup
 

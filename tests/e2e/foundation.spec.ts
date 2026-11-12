@@ -12,6 +12,18 @@ test('foundation status and authenticated check work without external requests o
     navigator.mediaDevices.getDisplayMedia = forbiddenCapture;
   });
   await page.goto('/');
+  await expect(page).toHaveTitle('Screeva — Your Screen. Your Studio.');
+  await expect(page.locator('.brand-wordmark')).toHaveText('screeva.');
+  await expect(page.locator('.brand-mark')).toBeVisible();
+  const faviconCheck = await page.evaluate(async () => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const href = link?.getAttribute('href') ?? '';
+    const response = await fetch(href);
+    const body = await response.text();
+    return { href, status: response.status, isFocusFrameSvg: body.includes('viewBox="0 0 32 32"') && body.includes('#9B5CFF') && body.includes('#00E5C3') };
+  });
+  expect(faviconCheck).toEqual({ href: '/icon.svg', status: 200, isFocusFrameSvg: true });
+  expect(await page.locator('body').innerText()).not.toContain('Local Creator Recorder');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.getByText('Connected', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Studio navigation' })).toBeVisible();
@@ -121,7 +133,9 @@ test('AppShell supports keyboard navigation, browser history, reload, and respon
   await expect(guidesButton).toHaveAttribute('aria-current', 'page');
   await expect(page).toHaveURL(/#guides$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Guides & reference documentation.' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'How Screeva works' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Quick start in 4 steps' })).toBeVisible();
+  expect(await page.locator('body').innerText()).not.toContain('Local Creator Recorder');
 
   await page.keyboard.press('End');
   await expect(settingsButton).toBeFocused();

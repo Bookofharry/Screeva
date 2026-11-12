@@ -172,7 +172,7 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryCount = 0, onOpenS
           </span>
           <h3>No saved videos yet</h3>
           <p className="setup-help">
-            Studio starts in <strong>Quick browser test</strong> mode so you can preview takes without writing files to disk. Follow these steps in <strong>Studio</strong> to save videos here permanently:
+            Screeva starts in <strong>Quick browser test</strong> mode so you can preview takes without writing files to disk. Follow these steps in <strong>Studio</strong> to save videos here permanently:
           </p>
           <ol className="how-it-works-grid" aria-label="How to save a video to your computer">
             <li>

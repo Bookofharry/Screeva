@@ -1,4 +1,4 @@
-# Local Creator Recorder — Electric Violet Color & UI Redesign
+# Screeva (`screeva.`) — Electric Violet Color & UI Redesign
 
 **Status:** Dark theme (`COLOR-0`–`COLOR-3`) implemented and verified (2026-11-12); optional light mode (`COLOR-4`) deferred. **Scope:** UI style, semantic color tokens, component visual treatment, tests and progressive rollout. **Out of scope:** changing recording engines, persistence, security, transport, or recovery services.
 

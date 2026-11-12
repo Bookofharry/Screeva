@@ -149,8 +149,19 @@ export function AppShell() {
               selectView('studio');
             }}
           >
-            <span className="record-mark" aria-hidden="true" />
-            <span>Local Creator Recorder</span>
+            <svg className="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <rect width="32" height="32" rx="8" fill="#0C0A16" />
+              <rect x="1" y="1" width="30" height="30" rx="7" fill="#191529" stroke="#483C5E" strokeWidth="1.5" />
+              <path d="M7 12V8.5C7 7.67157 7.67157 7 8.5 7H12" stroke="#9B5CFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M20 7H23.5C24.3284 7 25 7.67157 25 8.5V12" stroke="#9B5CFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 20V23.5C7 24.3284 7.67157 25 8.5 25H12" stroke="#9B5CFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M25 20V23.5C25 24.3284 24.3284 25 23.5 25H20" stroke="#9B5CFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="16" cy="16" r="4" fill="#00E5C3" />
+            </svg>
+            <span className="brand-wordmark">
+              screeva<span className="brand-wordmark__dot">.</span>
+            </span>
+            <span className="brand-tagline">Your Screen. Your Studio.</span>
           </a>
           <div className="app-header__status" role="group" aria-label="Global studio status">
             <StatusPill
@@ -318,8 +329,8 @@ export function AppShell() {
         </p>
       </main>
       <footer>
-        <span>Built for a private creative workflow.</span>
-        <span>Working title · v0.1</span>
+        <span>Screeva · Your Screen. Your Studio.</span>
+        <span>Local-first recording studio · v0.1</span>
       </footer>
     </div>
   );

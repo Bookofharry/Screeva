@@ -83,7 +83,7 @@ export function RecoveryPanel({ refreshTrigger = 0, onItemsChange, onSalvaged }:
           </span>
           <h3>All your videos are safe</h3>
           <p className="setup-help">
-            You have no interrupted recordings waiting to be restored.
+            You have no interrupted Screeva recordings waiting to be restored.
           </p>
           <ol className="how-it-works-grid" aria-label="How auto-save recovery works">
             <li>

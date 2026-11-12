@@ -1,6 +1,7 @@
-# UX_DESIGN.md — Local Creator Recorder Studio Redesign
+# UX_DESIGN.md — Screeva (`screeva.`) Studio Redesign
 
-- **Status:** Source-audited & Chromium-inspected design specification — **awaiting design review before screen/layout refactor**
+- **Brand:** **Screeva** (`screeva.` — *Your Screen. Your Studio.*, formerly *Local Creator Recorder*; see `ADR-025`)
+- **Status:** Source-audited & Chromium-inspected design specification (`UX-0`–`UX-2`, `COLOR-0`–`COLOR-3`, and `BRAND-1` verified)
 - **Date:** 2026-11-11
 - **Scope:** Source-backed UX audit (`apps/client/src/**`), live Chromium DOM/viewport inspection (`1440×900`, `1280×720`, `768×1024`, `375×812`), user journeys, navigation & information architecture, desktop/mobile wireframes, dark-first design system, complete application state matrix, engine/security invariants, and incremental migration backlog (`UX-0`–`UX-5`).
 

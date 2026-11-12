@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Capabilities } from '../packages/shared/src/index.js';
 import { GuidesPanel } from '../apps/client/src/components/GuidesPanel.js';
 import { RecordingsPanel } from '../apps/client/src/components/RecordingsPanel.js';
+import { RecoveryPanel } from '../apps/client/src/components/RecoveryPanel.js';
 import { SettingsPanel } from '../apps/client/src/components/SettingsPanel.js';
 import { initialDurableRecordingSnapshot } from '../apps/client/src/media/durable-recording-engine.js';
 import { initialRecordingSnapshot } from '../apps/client/src/media/recording-engine.js';
 import {
+  DEFAULT_STUDIO_VIEW,
   STUDIO_VIEWS,
   deriveGlobalShellStatus,
   formatClockDuration,
@@ -17,6 +22,8 @@ import {
   parseViewFromHash,
   viewToHash,
 } from '../apps/client/src/ui/shell-status.js';
+
+const rootDir = fileURLToPath(new URL('../', import.meta.url));
 
 const readyCapabilities: Capabilities = {
   name: 'Local Creator Recorder',
@@ -246,8 +253,50 @@ test('derives temporary recorder and failure states and renders truthful Setting
   assert.match(recordingsMarkup, /Loading local sessions…/);
 
   const guidesMarkup = renderToStaticMarkup(createElement(GuidesPanel, {}));
-  assert.match(guidesMarkup, /How Local Creator Recorder works/);
+  assert.match(guidesMarkup, /How Screeva works/);
+  assert.match(guidesMarkup, /Your Screen\. Your Studio\./);
   assert.match(guidesMarkup, /Quick start in 4 steps/);
   assert.match(guidesMarkup, /Crash recovery &amp; salvage/);
+  assert.doesNotMatch(guidesMarkup, /Local Creator Recorder/);
+
+  const recoveryMarkup = renderToStaticMarkup(createElement(RecoveryPanel, {}));
+  assert.doesNotMatch(recoveryMarkup, /Local Creator Recorder/);
+});
+
+test('Screeva brand identity, focus-frame favicon, HTML metadata, and removal of obsolete user-facing names', () => {
+  assert.equal(DEFAULT_STUDIO_VIEW.heading, 'Your Screen. Your Studio.');
+  assert.equal(
+    DEFAULT_STUDIO_VIEW.description,
+    'A modern, local-first screen and webcam recording studio for creators, developers, and educators.',
+  );
+  for (const view of STUDIO_VIEWS) {
+    assert.doesNotMatch(view.heading, /Local Creator Recorder/);
+    assert.doesNotMatch(view.description, /Local Creator Recorder/);
+  }
+
+  const indexHtml = readFileSync(path.join(rootDir, 'apps/client/index.html'), 'utf8');
+  assert.match(indexHtml, /<title>Screeva — Your Screen\. Your Studio\.<\/title>/);
+  assert.match(
+    indexHtml,
+    /<meta name="description" content="A modern, local-first screen and webcam recording studio for creators, developers, and educators\." \/>/,
+  );
+  assert.match(indexHtml, /<link rel="icon" type="image\/svg\+xml" href="\/icon\.svg" \/>/);
+  assert.doesNotMatch(indexHtml, /Local Creator Recorder/);
+
+  const iconSvg = readFileSync(path.join(rootDir, 'apps/client/public/icon.svg'), 'utf8');
+  assert.match(iconSvg, /viewBox="0 0 32 32"/);
+  assert.match(iconSvg, /#0C0A16/i);
+  assert.match(iconSvg, /#191529/i);
+  assert.match(iconSvg, /#9B5CFF/i);
+  assert.match(iconSvg, /#00E5C3/i);
+  assert.doesNotMatch(iconSvg.replace('xmlns="http://www.w3.org/2000/svg"', ''), /https?:\/\//i);
+  assert.doesNotMatch(iconSvg, /<text|<font|@import/i);
+
+  const appShellSource = readFileSync(path.join(rootDir, 'apps/client/src/components/AppShell.tsx'), 'utf8');
+  assert.match(appShellSource, /className="brand-wordmark"/);
+  assert.match(appShellSource, /screeva<span className="brand-wordmark__dot">\.<\/span>/);
+  assert.match(appShellSource, /Your Screen\. Your Studio\./);
+  assert.doesNotMatch(appShellSource, /Local Creator Recorder/);
+  assert.doesNotMatch(appShellSource, /Working title/);
 });
 

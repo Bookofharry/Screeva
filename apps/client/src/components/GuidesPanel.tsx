@@ -119,13 +119,14 @@ export function GuidesPanel({ onSelectView }: GuidesPanelProps) {
       <article className="guides-article" aria-label="Application guide">
         <header className="panel guides-hero">
           <div className="guides-hero__top">
-            <span className="badge">v0.1 Reference</span>
+            <span className="badge">Screeva v0.1</span>
+            <span className="badge">Your Screen. Your Studio.</span>
             <span className="badge">100% Local Loopback</span>
             <span className="badge">WebM VP8/VP9 + Opus</span>
           </div>
-          <h2>How Local Creator Recorder works</h2>
+          <h2>How Screeva works</h2>
           <p className="panel-copy">
-            Local Creator Recorder is a privacy-first browser studio paired with a local service on your computer.
+            Screeva is a modern, local-first screen and webcam recording studio for creators, developers, and educators.
             Every frame is composed on an HTML5 canvas, mixed through Web Audio, and either previewed in memory or streamed in SHA-256 verified chunks to local disk.
           </p>
         </header>
@@ -311,7 +312,7 @@ export function GuidesPanel({ onSelectView }: GuidesPanelProps) {
             <h2 id="heading-privacy">Local privacy &amp; capability boundaries</h2>
           </div>
           <p className="panel-copy">
-            Local Creator Recorder is architected so your audio, video, and session metadata never leave your machine. You can verify live service health anytime in <strong>Settings</strong>.
+            Screeva is architected so your audio, video, and session metadata never leave your machine. You can verify live service health anytime in <strong>Settings</strong>.
           </p>
           <dl className="guides-dl">
             <div>

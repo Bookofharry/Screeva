@@ -181,6 +181,14 @@
 **Alternatives:** Add `react-router-dom` and unmount inactive routes; hoist every media service and `<canvas>`/`<video>` element into a global singleton store in UX-1B; block view switching during capture or recording.  
 **Consequences:** Users can inspect `Recordings`, `Recovery` and `Settings` (or use browser Back/Forward) during active capture, recording, chunk upload, retry and finalization without interrupting tracks, dropping chunks or duplicating compositor/mixer/recorder instances. No new runtime dependency is introduced. The hidden Studio DOM remains in memory while browsing other views, which is negligible for a single-window local studio and preserves all existing Phase 2–3 media ownership invariants.
 
+## ADR-025 — Screeva working-brand identity and stable internal identifiers
+**Status:** Accepted (working brand; trademark and domain clearance pending).  
+**Date:** 2026-11-12.  
+**Context:** Following the Electric Violet visual redesign (`COLOR-0`–`COLOR-3`), the product needed a cohesive user-facing brand identity to replace the initial *Local Creator Recorder* working title from ADR-008 without risking regressions across internal workspace packages, SQLite schemas, API contracts, or media/recovery services.  
+**Decision:** Adopt **Screeva** as the official user-facing product name across the browser UI (`index.html`, `AppShell`, `GuidesPanel`, `RecordingsPanel`, `RecoveryPanel`, `shell-status.ts`), documentation (`README.md`, `PRD.md`, `UX_DESIGN.md`), and local SVG favicon/logo (`apps/client/public/icon.svg`), with display wordmark **`screeva.`**, tagline **`Your Screen. Your Studio.`**, description *"A modern, local-first screen and webcam recording studio for creators, developers, and educators"*, and the Electric Violet + Mint brand palette (`#0C0A16` background, `#191529` surface, `#9B5CFF` primary violet, `#00E5C3` mint accent, `#F6F2FF` primary text). Keep internal npm workspace names (`local-creator-recorder`, `@recorder/*`), backend services, SQLite schema/file paths (`data/recorder.sqlite`), HTTP headers (`X-Recorder-Token`, `X-Recorder-Bootstrap`), and the `Capabilities.name` wire literal unchanged.  
+**Alternatives:** Keep *Local Creator Recorder* in user-facing UI; rename all internal packages, database files, headers, and API wire literals simultaneously.  
+**Consequences:** User-facing surfaces present a unified `Screeva` / `screeva.` identity and minimal focus-frame SVG mark with zero external font or CDN dependencies, while all existing media engines, durable chunk pipelines, security boundaries, and API contracts remain 100% backwards-compatible. Historical ADR-008 remains preserved as the initial foundation record, and formal trademark/domain clearance remains pending before public commercial release.
+
 ## Template for a new decision
 ```md
 ## ADR-XXX — Title
