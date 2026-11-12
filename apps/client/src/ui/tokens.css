@@ -1,0 +1,116 @@
+/*
+ * Design tokens for Local Creator Recorder — Electric Violet dark theme
+ * (ELECTRIC_VIOLET_UX_REDESIGN.md §2 & UX_DESIGN.md §6.2).
+ * Colours are plain 6-digit hex so tests/design-tokens.test.ts can verify
+ * WCAG 2.2 AA contrast for every text and non-text UI pair. Keep this file
+ * free of selectors other than :root, [data-theme="dark"], and the
+ * reduced-motion override.
+ */
+:root,
+[data-theme="dark"] {
+  /* Canonical Electric Violet semantic tokens */
+  --color-bg: #0c0a16;
+  --color-surface: #191529;
+  --color-surface-raised: #241d38;
+  --color-surface-hover: #302644;
+  --color-surface-stage: #05040a;
+  --color-border: #483c5e;
+  --color-border-strong: #645480;
+  --color-border-input: #8575a6;
+  --color-text: #f6f2ff;
+  --color-text-soft: #d7d0e8;
+  --color-text-muted: #a9a4bb;
+  --color-primary: #9b5cff;
+  --color-primary-hover: #b79aff;
+  --color-primary-pressed: #9b5cff;
+  --color-primary-text: #b79aff;
+  --color-primary-border: #8d5cf0;
+  --color-on-primary: #0c0a16;
+  --color-accent: #00e5c3;
+  --color-on-accent: #0c0a16;
+  --color-focus: #00e5c3;
+  --color-success: #3fd0a8;
+  --color-success-border: #2ea884;
+  --color-warning: #ffb259;
+  --color-warning-surface: #231a14;
+  --color-warning-text: #ffe2bf;
+  --color-danger: #ff6678;
+  --color-danger-surface: #26131c;
+  --color-recording: #ff445e;
+  --color-recording-text: #ff9eaa;
+  --color-recording-button: #c81e3a;
+  --color-recording-button-hover: #ad1831;
+  --color-disabled-bg: #302b3b;
+  --color-disabled-text: #8b849b;
+  --color-info: #9cc4ff;
+  --color-overlay: rgb(5 4 10 / 76%);
+
+  /* Compatibility alias tokens (UX-1A / UX-2) */
+  --bg: #0c0a16;
+  --surface-1: #191529;
+  --surface-2: #241d38;
+  --surface-stage: #05040a;
+  --warning-surface: #231a14;
+
+  /* Borders */
+  --border: #483c5e;
+  --border-strong: #645480;
+  --border-input: #8575a6;
+  --accent-border: #8d5cf0;
+
+  /* Text */
+  --text: #f6f2ff;
+  --text-soft: #d7d0e8;
+  --text-muted: #a9a4bb;
+  --warning-text: #ffe2bf;
+
+  /* Interactive & highlight tokens */
+  --accent: #b79aff;
+  --accent-strong: #00e5c3;
+  --accent-soft: #d7c6ff;
+  --on-accent: #0c0a16;
+
+  /* Status */
+  --live: #3fd0a8;
+  --live-border: #2ea884;
+  --record: #ff445e;
+  --record-text: #ff9eaa;
+  /* Darker red for filled record buttons so the light label meets >= 4.5:1. */
+  --record-button: #c81e3a;
+  --record-button-hover: #ad1831;
+  --warning: #ffb259;
+  --danger: #ff6678;
+  --info: #9cc4ff;
+
+  /* Shape and spacing (4-pt grid) */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Type (local/system-only stack under app CSP) */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", SFMono-Regular, Consolas, monospace;
+
+  /* Effects and motion */
+  --shadow-pop: 0 10px 28px rgb(5 4 10 / 56%);
+  --shadow-stage: 0 8px 24px rgb(12 10 22 / 48%);
+  --focus-ring: 2px solid var(--color-focus);
+  --duration-fast: 140ms;
+  --duration-base: 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-theme="dark"] {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
+}
