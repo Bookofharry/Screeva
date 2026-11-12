@@ -16,7 +16,7 @@ Phase 1 uses exact direct dependency versions and a committed npm lockfile. Runt
 | @playwright/test | Chromium regression tests | Apache-2.0 | Development only; browser downloaded separately; downloaded browser has its own third-party notices |
 | Node.js built-in SQLite | Local metadata | Node.js/SQLite bundled notices | No extra npm native database dependency; use the pinned Node major; Node SQLite API is experimental in the tested 24.13 runtime |
 
-Chosen source license: MIT, using the working name Local Creator Recorder. No trademark search or release-name clearance has been performed. No FFmpeg binary, face model, codec package, recording, or private test footage is included; review their licenses before later introduction.
+Chosen source license: MIT, using the working brand Screeva (formerly Local Creator Recorder). No trademark search or release-name clearance has been performed. No FFmpeg binary, face model, codec package, recording, or private test footage is included; review their licenses before later introduction.
 
 `npm run licenses` reports all declared lockfile licenses, including optional platform packages. Review `package-lock.json` and installed package notices before distribution. `npm audit` checks registry advisories at execution time; a clean result does not establish that dependencies are free of vulnerabilities. Initial verified results belong in TASKS.md.
 

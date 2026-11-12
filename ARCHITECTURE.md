@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — Local Creator Recorder
+# ARCHITECTURE.md — Screeva (`screeva.`)
 
 > Draft design, not a claim of implemented code. Update alongside implementation.
 

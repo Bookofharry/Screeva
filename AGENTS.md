@@ -1,7 +1,7 @@
 # AGENTS.md — Instructions for AI coding agents
 
 ## Project
-This repo will implement Local Creator Recorder, a local-first browser screen/webcam recorder with Node.js/Express, FFmpeg export, camera auto framing, and presentation focus tools.
+This repo implements Screeva (formerly Local Creator Recorder), a local-first browser screen/webcam recorder with Node.js/Express, FFmpeg export, camera auto framing, and presentation focus tools.
 
 ## Read before editing
 1. `PRD.md` — product scope, requirements, acceptance criteria.
