@@ -4,19 +4,45 @@
 
 A modern, local-first screen and webcam recording studio for creators, developers, and educators (**under development**). This checkout implements Phase 1, Phase 2 and most of Phase 3: permission checks, device selectors, sustained screen/camera/microphone capture, live previews/cleanup, canvas composition, local microphone/display-audio mixing, short in-memory WebM recording, durable chunked WebM recording to the local server with FFprobe-validated finalization, and best-effort recovery of server-acknowledged chunks after an interruption. Finalization and salvage require a trusted FFprobe binary. MP4 export, face tracking and focus zoom are not implemented. See TASKS.md for exactly what has been verified. **Screeva** is the working brand name (formerly *Local Creator Recorder*; internal workspace package and API capability names remain unchanged for stability, and trademark/domain clearance is not claimed).
 
-## Windows setup
+## Download prebuilt app (macOS & Windows — no Node.js required)
 
-Install Node.js **24.13 or later within the 24.x line**, including npm. From PowerShell in this checkout:
+If you just want to run **Screeva** without installing Node.js or building from source, download the latest prebuilt release from [**GitHub Releases**](https://github.com/Bookofharry/Screeva/releases/latest):
 
-```powershell
-npm ci
+- **macOS (Apple Silicon):** Download **`Screeva-macOS-arm64.dmg`** (or **`Screeva-macOS-arm64.zip`**), open it, and double-click **`Screeva.app`** (or **`Start Screeva.command`**).
+  - *macOS Gatekeeper tip:* Because this open-source build is not notarized with a paid Apple Developer ID yet, on first launch **Right-click (Control-click) `Screeva.app` → Open**, or run `xattr -cr Screeva.app` in Terminal.
+- **Windows (64-bit):** Download **`Screeva-Windows-x64.zip`**, extract the `Screeva` folder anywhere, and double-click **`Start Screeva.cmd`**.
+
+Both bundles include an embedded Node.js 24 runtime and automatically launch the studio at **http://127.0.0.1:4317** in your browser (Chrome, Edge, Brave, or Arc recommended).
+
+---
+
+## Setup from source (macOS, Windows & Linux)
+
+Install Node.js **24.13 or later within the 24.x line**.
+
+### macOS & Linux (Terminal — `zsh` / `bash`)
+
+```bash
+npm ci --prefer-offline
 npm run build
 npm start
 ```
 
-Open the printed address, normally **http://127.0.0.1:4317**. Use this exact address; `localhost`, other Host headers, proxies, and LAN access are intentionally rejected. To choose another port, set `$env:PORT = '4319'` before starting. No account or external service is needed. Camera, microphone and screen access are requested only when you click a capture control. Stop with Ctrl+C.
+*(Or with `pnpm`: `pnpm install && pnpm run build && pnpm start`)*
 
-**FFprobe for durable recordings:** finishing a durable recording or salvaging an interrupted one requires a trusted `ffprobe` executable (part of FFmpeg). The server runs `ffprobe` from `PATH`, or the absolute path in `$env:FFPROBE_PATH` if set (relative paths are rejected). Without it, chunks are still durably stored, but finalization fails and the session is never marked complete. Temporary in-browser recording does not need FFprobe.
+Open the printed address, normally **http://127.0.0.1:4317**. Use this exact address; `localhost`, other Host headers, proxies, and LAN access are intentionally rejected. To choose another port on macOS/Linux, run `PORT=4319 npm start`. Stop with `Ctrl+C`.
+
+### Windows (PowerShell)
+
+```powershell
+npm ci --prefer-offline
+npm run build
+npm start
+```
+
+Open **http://127.0.0.1:4317**. To choose another port in PowerShell, set `$env:PORT = '4319'` before starting. No account or external service is needed. Camera, microphone and screen access are requested only when you click a capture control. Stop with `Ctrl+C`.
+
+**FFprobe for durable recordings:** finishing a durable recording or salvaging an interrupted one requires a trusted `ffprobe` executable (part of FFmpeg — e.g. `brew install ffmpeg` on macOS or `winget install Gyan.FFmpeg` on Windows). The server runs `ffprobe` from `PATH`, or the absolute path in `FFPROBE_PATH` (`$env:FFPROBE_PATH` on Windows) if set (relative paths are rejected). Without it, chunks are still durably stored, but finalization fails and the session is never marked complete. Temporary in-browser recording does not need FFprobe.
 
 The UI shows input setup, local service and SQLite status. **Check local access** exercises the authenticated API boundary without modifying recordings. Page load and device selection never open camera/microphone streams. Dependencies and the optional test browser need network access for installation; the built application uses only local resources.
 
