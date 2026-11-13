@@ -104,19 +104,34 @@ async function enableAudioIfNeeded(page: Page) {
   if (await button.isVisible()) await button.click();
 }
 
+async function chooseTemporaryRecording(page: Page) {
+  await page.getByRole('button', { name: 'Recording options' }).click();
+  await page.getByRole('radio', { name: 'Temporary browser preview' }).check();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+}
+
+async function beforeUnloadIsPrevented(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+}
+
 test('records playable WebM video with mixed audio, codec metadata, duration and pause/resume', async ({ page }) => {
   await installRecordingSources(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Share screen', exact: true }).click();
   await page.getByRole('button', { name: 'Start microphone', exact: true }).click();
   await enableAudioIfNeeded(page);
+  await chooseTemporaryRecording(page);
   await page.getByRole('button', { name: 'Scene & output settings' }).click();
   await expect(page.getByText('Canvas video: ready')).toBeVisible();
   await expect(page.getByText('Mixed audio: ready')).toBeVisible();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
 
   await page.getByRole('button', { name: 'Start recording', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Recording');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('● REC');
   await page.waitForTimeout(1200);
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Paused');
@@ -202,7 +217,7 @@ test('durable mode creates a session, delivers multiple real MediaRecorder chunk
   await page.getByLabel('Recording name').fill('Durable browser fixture');
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: 'Start recording', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Recording');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('● REC');
   await page.waitForTimeout(2300);
   await page.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Saved', { timeout: 15_000 });
@@ -221,6 +236,67 @@ test('durable mode creates a session, delivers multiple real MediaRecorder chunk
   expect(await page.evaluate(() => window.recordingTest.blobs.length)).toBe(0);
   expect(await page.evaluate(() => window.recordingTest.states().every(state => state === 'live'))).toBe(true);
   await page.getByRole('button', { name: 'Stop all capture' }).click();
+});
+
+test('UX-3 defaults to durable, supports a skippable countdown, guards unsafe unload, and restores title after validated save', async ({ page }) => {
+  let releaseFinalization: (() => void) | null = null;
+  await page.route('**/api/v1/sessions/*/finalize', async route => {
+    await new Promise<void>(resolve => { releaseFinalization = resolve; });
+    await route.continue();
+  });
+  await installRecordingSources(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Share screen', exact: true }).click();
+  await page.getByRole('button', { name: 'Recording options' }).click();
+  await expect(page.getByRole('radio', { name: 'Durable local session' })).toBeChecked();
+  await page.getByLabel('Recording name').fill('UX-3 truthful save fixture');
+  await page.getByLabel('3-second countdown').check();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+
+  expect(await beforeUnloadIsPrevented(page)).toBe(false);
+  await page.getByRole('button', { name: 'Start recording', exact: true }).click();
+  await expect(page.getByText('Starting in 3')).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Ready');
+  await expect(page).toHaveTitle('Screeva — Your Screen. Your Studio.');
+  await page.getByRole('button', { name: 'Skip / Start now' }).click();
+
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('● REC');
+  await expect(page).toHaveTitle(/● REC \d{2}:\d{2} — Screeva/);
+  expect(await beforeUnloadIsPrevented(page)).toBe(true);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Paused');
+  await expect(page).toHaveTitle(/Paused \d{2}:\d{2} — Screeva/);
+  await page.getByRole('button', { name: 'Resume', exact: true }).click();
+  await page.waitForTimeout(1_100);
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(page.getByRole('progressbar', { name: 'Finalizing recording' })).toBeVisible({ timeout: 10_000 });
+  expect(await beforeUnloadIsPrevented(page)).toBe(true);
+  if (!releaseFinalization) throw new Error('Finalization request was not held.');
+  (releaseFinalization as () => void)();
+
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Saved', { timeout: 15_000 });
+  await expect(page.getByText('Saved locally')).toBeVisible();
+  await expect(page).toHaveTitle('Screeva — Your Screen. Your Studio.');
+  expect(await beforeUnloadIsPrevented(page)).toBe(false);
+});
+
+test('UX-3 never renders Saved locally when durable finalization is rejected', async ({ page }) => {
+  await page.route('**/api/v1/sessions/*/finalize', route => route.fulfill({
+    status: 409,
+    contentType: 'application/json',
+    body: JSON.stringify({ apiVersion: 'v1', ok: false, error: { code: 'CONFLICT', message: 'Injected finalization conflict.' } }),
+  }));
+  await installRecordingSources(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Share screen', exact: true }).click();
+  await page.getByRole('button', { name: 'Start recording', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('● REC');
+  await page.waitForTimeout(1_100);
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Failed', { timeout: 10_000 });
+  await expect(page.getByRole('alert')).toContainText('Injected finalization conflict.');
+  await expect(page.getByText('Saved locally')).toHaveCount(0);
+  expect(await beforeUnloadIsPrevented(page)).toBe(false);
 });
 
 test('recovery UI inspects and salvages only server-acknowledged interrupted chunks', async ({ page }) => {
@@ -294,7 +370,7 @@ test('switching Studio, Recordings, Recovery, and Settings views during capture,
   await page.getByLabel('Recording name').fill('Cross-view durable fixture');
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: 'Start recording', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText(/Recording|Retrying/);
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText(/● REC|Retrying/);
 
   await page.getByRole('button', { name: /^Recordings/ }).click();
   await expect(page.getByRole('status', { name: 'Background studio activity' })).toBeVisible();
@@ -335,11 +411,12 @@ test('switching Studio, Recordings, Recovery, and Settings views during capture,
 test('recorder fails safely when a borrowed compositor output ends and leaves mixer output live', async ({ page }) => {
   await installRecordingSources(page);
   await page.goto('/');
+  await chooseTemporaryRecording(page);
   await page.getByRole('button', { name: 'Scene & output settings' }).click();
   await expect(page.getByText('Mixed audio: unavailable (video-only recording)')).toBeVisible();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: 'Start recording', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Recording');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('● REC');
   await page.waitForTimeout(300);
   await page.evaluate(() => window.recordingTest.canvasOutputs[0]?.getVideoTracks()[0]?.stop());
   await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Failed');
@@ -353,6 +430,7 @@ test('unsupported MediaRecorder configuration reports an actionable failure', as
     Object.defineProperty(MediaRecorder, 'isTypeSupported', { configurable: true, value: () => false });
   });
   await page.goto('/');
+  await chooseTemporaryRecording(page);
   await page.getByRole('button', { name: 'Start recording', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Failed');
   await expect(page.getByRole('alert')).toContainText('does not support the required WebM');

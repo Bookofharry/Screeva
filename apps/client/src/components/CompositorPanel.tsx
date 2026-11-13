@@ -123,7 +123,6 @@ export function CompositorPanel({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [sceneModalOpen]);
 
-  function changePip(next: NormalizedRect) { setPip(clampNormalizedRect(next)); }
   function changeScreen(next: NormalizedRect) { setScreenRect(clampNormalizedRect(next, 0.2)); }
   function beginPointer(target: 'pip' | 'screen', mode: 'move' | 'resize', event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -268,22 +267,6 @@ export function CompositorPanel({
               </select></label>
               {layout === 'split' && <label>Screen proportion <output>{Math.round(split * 100)}%</output><input aria-label="Screen proportion" type="range" min="20" max="80" value={Math.round(split * 100)} onChange={event => setSplit(Number(event.target.value) / 100)} /></label>}
             </div>
-            {(layout === 'pip' || layout === 'screen') && <fieldset className="pip-controls"><legend>Screen view geometry</legend>
-              <div className="pip-controls__grid">
-                <label>Horizontal <output>{Math.round(screenRect.x * 100)}%</output><input aria-label="Screen horizontal position" type="range" min="0" max={Math.round((1 - screenRect.width) * 100)} value={Math.round(screenRect.x * 100)} onChange={event => changeScreen({ ...screenRect, x: Number(event.target.value) / 100 })} /></label>
-                <label>Vertical <output>{Math.round(screenRect.y * 100)}%</output><input aria-label="Screen vertical position" type="range" min="0" max={Math.round((1 - screenRect.height) * 100)} value={Math.round(screenRect.y * 100)} onChange={event => changeScreen({ ...screenRect, y: Number(event.target.value) / 100 })} /></label>
-                <label>Width <output>{Math.round(screenRect.width * 100)}%</output><input aria-label="Screen view width" type="range" min="20" max="100" value={Math.round(screenRect.width * 100)} onChange={event => changeScreen({ ...screenRect, width: Number(event.target.value) / 100 })} /></label>
-                <label>Height <output>{Math.round(screenRect.height * 100)}%</output><input aria-label="Screen view height" type="range" min="20" max="100" value={Math.round(screenRect.height * 100)} onChange={event => changeScreen({ ...screenRect, height: Number(event.target.value) / 100 })} /></label>
-              </div>
-            </fieldset>}
-            {layout === 'pip' && <fieldset className="pip-controls"><legend>Webcam overlay geometry</legend>
-              <div className="pip-controls__grid">
-                <label>Horizontal <output>{Math.round(pip.x * 100)}%</output><input aria-label="Webcam horizontal position" type="range" min="0" max={Math.round((1 - pip.width) * 100)} value={Math.round(pip.x * 100)} onChange={event => changePip({ ...pip, x: Number(event.target.value) / 100 })} /></label>
-                <label>Vertical <output>{Math.round(pip.y * 100)}%</output><input aria-label="Webcam vertical position" type="range" min="0" max={Math.round((1 - pip.height) * 100)} value={Math.round(pip.y * 100)} onChange={event => changePip({ ...pip, y: Number(event.target.value) / 100 })} /></label>
-                <label>Width <output>{Math.round(pip.width * 100)}%</output><input aria-label="Webcam overlay width" type="range" min="15" max="60" value={Math.round(pip.width * 100)} onChange={event => changePip({ ...pip, width: Number(event.target.value) / 100 })} /></label>
-                <label>Height <output>{Math.round(pip.height * 100)}%</output><input aria-label="Webcam overlay height" type="range" min="15" max="60" value={Math.round(pip.height * 100)} onChange={event => changePip({ ...pip, height: Number(event.target.value) / 100 })} /></label>
-              </div>
-            </fieldset>}
             <div ref={readinessSlotRef} className="scene-modal__readiness" />
           </div>
           <div className="scene-modal__footer">

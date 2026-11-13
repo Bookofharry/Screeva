@@ -422,9 +422,12 @@ test('five-minute composed recording stays synchronized, continuous and within m
   await expect(page.getByRole('status', { name: 'Audio mix mode' })).toHaveText('Microphone + display audio');
   await expect(page.getByText('Canvas video: ready')).toBeVisible();
   await expect(page.getByText('Mixed audio: ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Recording options' }).click();
+  await page.getByRole('radio', { name: 'Temporary browser preview' }).check();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
 
   await page.getByRole('button', { name: 'Start recording', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Recording');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('● REC');
   const memorySamples: MemorySample[] = [await sampleMemory(page, 0)];
   for (let minute = 1; minute <= 5; minute++) {
     await page.waitForTimeout(60_000);
@@ -441,7 +444,7 @@ test('five-minute composed recording stays synchronized, continuous and within m
 
   const pauseWallStarted = performance.now();
   await page.getByRole('button', { name: 'Start new recording' }).click();
-  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Recording');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('● REC');
   await page.waitForTimeout(2_000);
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Paused');

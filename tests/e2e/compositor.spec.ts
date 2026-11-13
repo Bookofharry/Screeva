@@ -98,12 +98,8 @@ test('renders all layouts with preserved aspect ratios, normalized PIP and adjus
   await waitForPixel(page, 700, 360, [40, 103, 78, 255]);
 
   await page.getByLabel('Layout').selectOption('pip');
-  await page.getByLabel('Webcam horizontal position').fill('10');
-  await page.getByLabel('Webcam vertical position').fill('10');
-  await page.getByLabel('Webcam overlay width').fill('20');
-  await page.getByLabel('Webcam overlay height').fill('20');
-  await waitForPixel(page, 200, 120, [40, 103, 78, 255]);
-  await waitForPixel(page, 800, 360, [32, 76, 113, 255]);
+  await waitForPixel(page, 1050, 550, [40, 103, 78, 255]);
+  await waitForPixel(page, 640, 360, [32, 76, 113, 255]);
 
   await page.getByLabel('Resolution').selectOption('1080p');
   await expect(page.getByLabel('Composed video preview')).toHaveJSProperty('width', 1920);
@@ -112,28 +108,37 @@ test('renders all layouts with preserved aspect ratios, normalized PIP and adjus
   await page.getByRole('button', { name: 'Stop all capture' }).click();
 });
 
-test('PIP can be moved and resized by pointer without escaping normalized bounds', async ({ page }) => {
+test('PIP and screen view can be moved and resized by pointer without escaping normalized bounds', async ({ page }) => {
   await syntheticSources(page); await page.goto('/');
   await page.getByRole('button', { name: 'Share screen', exact: true }).click();
   await page.getByRole('button', { name: 'Start camera', exact: true }).click();
-  const x = page.getByLabel('Webcam horizontal position'); const width = page.getByLabel('Webcam overlay width');
-  const beforeX = Number(await x.inputValue());
+  const pipEditor = page.locator('.pip-editor');
+  const getRectPercentages = async (selector: string) => page.locator(selector).evaluate((el: HTMLElement) => ({
+    x: parseFloat(el.style.left),
+    y: parseFloat(el.style.top),
+    width: parseFloat(el.style.width),
+    height: parseFloat(el.style.height),
+  }));
+
+  const beforePip = await getRectPercentages('.pip-editor');
   const move = page.getByRole('button', { name: 'Move webcam overlay' }); await move.scrollIntoViewIfNeeded(); const moveBox = await move.boundingBox();
   if (!moveBox) throw new Error('Move handle missing');
   await page.mouse.move(moveBox.x + moveBox.width / 2, moveBox.y + moveBox.height / 2);
   await page.mouse.down(); await page.mouse.move(moveBox.x + moveBox.width / 2 - 80, moveBox.y + moveBox.height / 2 - 35); await page.mouse.up();
-  expect(Number(await x.inputValue())).toBeLessThan(beforeX);
-  const beforeWidth = Number(await width.inputValue());
+  const movedPip = await getRectPercentages('.pip-editor');
+  expect(movedPip.x).toBeLessThan(beforePip.x);
+
   const resize = page.getByRole('button', { name: 'Resize webcam overlay' }); await resize.scrollIntoViewIfNeeded(); const resizeBox = await resize.boundingBox();
   if (!resizeBox) throw new Error('Resize handle missing');
   await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
   await page.mouse.down(); await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 60, resizeBox.y + resizeBox.height / 2 + 25); await page.mouse.up();
-  expect(Number(await width.inputValue())).toBeGreaterThan(beforeWidth);
-  expect(Number(await x.inputValue()) + Number(await width.inputValue())).toBeLessThanOrEqual(100);
+  const resizedPip = await getRectPercentages('.pip-editor');
+  expect(resizedPip.width).toBeGreaterThan(movedPip.width);
+  expect(resizedPip.x + resizedPip.width).toBeLessThanOrEqual(100.01);
+  await expect(pipEditor).toBeVisible();
 
-  const screenWidth = page.getByLabel('Screen view width');
-  const screenX = page.getByLabel('Screen horizontal position');
-  expect(Number(await screenWidth.inputValue())).toBe(100);
+  const initialScreen = await getRectPercentages('.screen-editor');
+  expect(initialScreen.width).toBe(100);
   const resizeScreen = page.getByRole('button', { name: 'Resize screen view' });
   await resizeScreen.scrollIntoViewIfNeeded();
   const resizeScreenBox = await resizeScreen.boundingBox();
@@ -142,7 +147,8 @@ test('PIP can be moved and resized by pointer without escaping normalized bounds
   await page.mouse.down();
   await page.mouse.move(resizeScreenBox.x + resizeScreenBox.width / 2 - 140, resizeScreenBox.y + resizeScreenBox.height / 2 - 90);
   await page.mouse.up();
-  expect(Number(await screenWidth.inputValue())).toBeLessThan(100);
+  const resizedScreen = await getRectPercentages('.screen-editor');
+  expect(resizedScreen.width).toBeLessThan(100);
 
   const moveScreen = page.getByRole('button', { name: 'Move screen view' });
   const moveScreenBox = await moveScreen.boundingBox();
@@ -151,11 +157,13 @@ test('PIP can be moved and resized by pointer without escaping normalized bounds
   await page.mouse.down();
   await page.mouse.move(moveScreenBox.x + moveScreenBox.width / 2 + 60, moveScreenBox.y + moveScreenBox.height / 2 + 30);
   await page.mouse.up();
-  expect(Number(await screenX.inputValue())).toBeGreaterThan(0);
+  const movedScreen = await getRectPercentages('.screen-editor');
+  expect(movedScreen.x).toBeGreaterThan(0);
 
   await page.getByRole('button', { name: 'Reset screen view' }).click();
-  expect(Number(await screenWidth.inputValue())).toBe(100);
-  expect(Number(await screenX.inputValue())).toBe(0);
+  const resetScreen = await getRectPercentages('.screen-editor');
+  expect(resetScreen.width).toBe(100);
+  expect(resetScreen.x).toBe(0);
 
   await page.getByRole('button', { name: 'Stop all capture' }).click();
 });

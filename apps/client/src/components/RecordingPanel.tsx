@@ -52,7 +52,7 @@ export function RecordingPanel({
   const startNowRef = useRef<() => void>(() => {});
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
-  const [mode, setMode] = useState<RecordingMode>('temporary');
+  const [mode, setMode] = useState<RecordingMode>(() => durableAvailable ? 'durable' : 'temporary');
   const [title, setTitle] = useState('Untitled recording');
   const [countdownEnabled, setCountdownEnabled] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -104,7 +104,7 @@ export function RecordingPanel({
 
   useEffect(() => {
     if (modeSelectedByUser.current || controlsLocked) return;
-    if (!durableAvailable) setMode('temporary');
+    setMode(durableAvailable ? 'durable' : 'temporary');
   }, [controlsLocked, durableAvailable]);
 
   useEffect(() => {
@@ -189,7 +189,7 @@ export function RecordingPanel({
           <div className="recording-dock__status">
             <h2 id="recording-title">Recorder</h2>
             <span className={recorderStatus === 'recording' ? 'badge recording-active recording-rec' : 'badge'} role="status" aria-label="Recording status">
-              {mode === 'durable' ? durableLabels[durableState.status] : temporaryLabels[temporaryState.status]}
+              {recorderStatus === 'recording' ? '● REC' : mode === 'durable' ? durableLabels[durableState.status] : temporaryLabels[temporaryState.status]}
             </span>
             <div className="recording-clock"><span className="ui-visually-hidden">Duration</span><time dateTime={`PT${Math.round(state.durationMs / 1000)}S`}>{formatDuration(state.durationMs)}</time></div>
           </div>
