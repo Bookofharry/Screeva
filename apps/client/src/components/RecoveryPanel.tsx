@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RecoveryInspection } from '../../../../packages/shared/src/index.js';
+import { isStaticBrowserHost } from '../api.js';
 import { RecoveryClient } from '../media/recovery-client.js';
 import { formatBytes } from '../media/recording-engine.js';
 import { Icon } from '../ui/Icon.js';
@@ -22,6 +23,14 @@ export function RecoveryPanel({ refreshTrigger = 0, onItemsChange, onSalvaged }:
   const [error, setError] = useState('');
 
   async function refresh(current = client.current): Promise<void> {
+    if (isStaticBrowserHost()) {
+      if (mounted.current) {
+        setItems([]);
+        onItemsChangeRef.current?.([]);
+        setLoading(false);
+      }
+      return;
+    }
     if (!current) return;
     setLoading(true); setError('');
     try {

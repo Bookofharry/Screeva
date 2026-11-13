@@ -4,6 +4,16 @@
 
 A modern, local-first screen and webcam recording studio for creators, developers, and educators (**under development**). This checkout implements Phase 1, Phase 2 and most of Phase 3: permission checks, device selectors, sustained screen/camera/microphone capture, live previews/cleanup, canvas composition, local microphone/display-audio mixing, short in-memory WebM recording, durable chunked WebM recording to the local server with FFprobe-validated finalization, and best-effort recovery of server-acknowledged chunks after an interruption. Finalization and salvage require a trusted FFprobe binary. MP4 export, face tracking and focus zoom are not implemented. See TASKS.md for exactly what has been verified. **Screeva** is the working brand name (formerly *Local Creator Recorder*; internal workspace package and API capability names remain unchanged for stability, and trademark/domain clearance is not claimed).
 
+## Use Screeva Instantly in Your Browser (macOS, Windows & Linux — Zero Install)
+
+Open the live browser studio directly — no downloads, no terminal, and no installation required:
+
+👉 **[https://bookofharry.github.io/Screeva/](https://bookofharry.github.io/Screeva/)**
+
+Works in Chrome, Edge, Brave, or Arc on **macOS**, **Windows**, and **Linux** (screen sharing, webcam, microphone, PIP/Split scene compositor, audio mixer, and instant `.webm` video recording + download).
+
+---
+
 ## Download prebuilt app (macOS & Windows — no Node.js required)
 
 If you just want to run **Screeva** without installing Node.js or building from source, download the latest prebuilt release from [**GitHub Releases**](https://github.com/Bookofharry/Screeva/releases/latest):

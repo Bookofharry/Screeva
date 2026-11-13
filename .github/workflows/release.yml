@@ -75,7 +75,8 @@ jobs:
           #!/bin/bash
           set -e
           CONTENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-          APP_DIR="$CONTENTS_DIR/Resources/app"
+          BUNDLE_APP_DIR="$CONTENTS_DIR/Resources/app"
+          USER_APP_DIR="$HOME/Library/Application Support/Screeva"
           PORT="${PORT:-4317}"
           URL="http://127.0.0.1:${PORT}"
 
@@ -84,9 +85,11 @@ jobs:
             exit 0
           fi
 
-          mkdir -p "$APP_DIR/data"
-          cd "$APP_DIR"
-          "$APP_DIR/runtime/node" "$APP_DIR/dist/apps/server/src/index.js" >/dev/null 2>&1 &
+          mkdir -p "$USER_APP_DIR/data"
+          rsync -a --delete --exclude 'data' "$BUNDLE_APP_DIR/" "$USER_APP_DIR/"
+          chmod +x "$USER_APP_DIR/runtime/node"
+          cd "$USER_APP_DIR"
+          "$USER_APP_DIR/runtime/node" "$USER_APP_DIR/dist/apps/server/src/index.js" >"$USER_APP_DIR/server.log" 2>&1 &
           SERVER_PID=$!
 
           for _ in {1..40}; do
