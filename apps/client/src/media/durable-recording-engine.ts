@@ -366,7 +366,7 @@ export class DurableRecordingEngine {
     this.delayTimers.clear();
   }
 
-  private async sendHeartbeat(generation: number): Promise<void> {
+  private async sendHeartbeat(generation: number, allowBusy = false): Promise<void> {
     const controller = new AbortController();
     this.heartbeatController?.abort();
     this.heartbeatController = controller;
@@ -376,6 +376,8 @@ export class DurableRecordingEngine {
         headers: { 'Content-Type': 'application/json', 'X-Recorder-Token': this.writeToken }, body: '{}', signal: controller.signal,
       });
       const body = await response.json() as unknown;
+      const busy = errorEnvelopeSchema.safeParse(body);
+      if (allowBusy && response.status === 409 && busy.success && busy.data.error.code === 'CONFLICT') return;
       const parsed = responseSchema(recoveryHeartbeatSchema).safeParse(body);
       if (!response.ok || !parsed.success || !parsed.data.ok) throw new Error(messageFromErrorBody(body, 'The local service could not maintain the recording activity lease.'));
     } finally {
@@ -389,7 +391,7 @@ export class DurableRecordingEngine {
     this.heartbeatTimer = this.runtime.setTimer(() => {
       this.heartbeatTimer = null;
       if (!this.isCurrent(generation) || this.phase !== 'active') return;
-      void this.sendHeartbeat(generation).then(() => {
+      void this.sendHeartbeat(generation, true).then(() => {
         if (this.isCurrent(generation) && this.phase === 'active') this.scheduleHeartbeat(generation);
       }).catch(error => {
         if (!this.isCurrent(generation) || this.phase !== 'active') return;

@@ -8,6 +8,7 @@ export interface CompositionConfig {
   layout: CompositionLayout;
   preset: ResolutionPreset;
   fps: 30;
+  screen: NormalizedRect;
   pip: NormalizedRect;
   split: number;
 }
@@ -17,8 +18,10 @@ export const RESOLUTIONS: Record<ResolutionPreset, Size> = {
   '720p': { width: 1280, height: 720 },
   '1080p': { width: 1920, height: 1080 },
 };
+export const DEFAULT_SCREEN_RECT: NormalizedRect = { x: 0, y: 0, width: 1, height: 1 };
 export const DEFAULT_COMPOSITION: CompositionConfig = {
   layout: 'pip', preset: '720p', fps: 30,
+  screen: { ...DEFAULT_SCREEN_RECT },
   pip: { x: 0.68, y: 0.64, width: 0.28, height: 0.28 }, split: 0.65,
 };
 
@@ -78,6 +81,8 @@ interface RenderContext {
   font: string;
   textAlign: CanvasTextAlign;
   textBaseline: CanvasTextBaseline;
+  imageSmoothingEnabled?: boolean;
+  imageSmoothingQuality?: ImageSmoothingQuality;
   fillRect(x: number, y: number, width: number, height: number): void;
   fillText(text: string, x: number, y: number): void;
   drawImage(image: CanvasImageSource, dx: number, dy: number, dWidth: number, dHeight: number): void;
@@ -118,7 +123,11 @@ export class CanvasCompositor {
   private readonly context: RenderContext;
   private readonly videos: Record<'screen' | 'camera', VideoSurface>;
   private sources: CompositionSources = { screen: null, camera: null };
-  private config: CompositionConfig = { ...DEFAULT_COMPOSITION, pip: { ...DEFAULT_COMPOSITION.pip } };
+  private config: CompositionConfig = {
+    ...DEFAULT_COMPOSITION,
+    screen: { ...DEFAULT_COMPOSITION.screen },
+    pip: { ...DEFAULT_COMPOSITION.pip },
+  };
   private running = false;
   private disposed = false;
   private frameHandle: number | null = null;
@@ -130,17 +139,26 @@ export class CanvasCompositor {
     const context = canvas.getContext('2d', { alpha: false });
     if (!context) throw new Error('Canvas 2D rendering is unavailable.');
     this.context = context;
+    this.context.imageSmoothingEnabled = true;
+    this.context.imageSmoothingQuality = 'high';
     this.videos = { screen: runtime.createVideo(), camera: runtime.createVideo() };
     this.applyResolution();
   }
 
-  getConfig(): CompositionConfig { return { ...this.config, pip: { ...this.config.pip } }; }
+  getConfig(): CompositionConfig {
+    return {
+      ...this.config,
+      screen: { ...this.config.screen },
+      pip: { ...this.config.pip },
+    };
+  }
 
   setConfig(patch: Partial<CompositionConfig>): void {
     if (this.disposed) return;
     this.config = {
       ...this.config, ...patch,
       fps: 30,
+      screen: patch.screen ? clampNormalizedRect(patch.screen, 0.2) : this.config.screen,
       pip: patch.pip ? clampNormalizedRect(patch.pip) : this.config.pip,
       split: patch.split === undefined ? this.config.split : clamp(patch.split, 0.2, 0.8),
     };
@@ -152,6 +170,8 @@ export class CanvasCompositor {
     const resolution = RESOLUTIONS[this.config.preset];
     if (this.canvas.width !== resolution.width) this.canvas.width = resolution.width;
     if (this.canvas.height !== resolution.height) this.canvas.height = resolution.height;
+    this.context.imageSmoothingEnabled = true;
+    this.context.imageSmoothingQuality = 'high';
   }
 
   setSources(sources: CompositionSources): void {
@@ -207,14 +227,17 @@ export class CanvasCompositor {
       this.placeholder('Start screen or camera capture to compose a scene.', full);
       return;
     }
+    const screenTarget = (this.config.layout === 'screen' || this.config.layout === 'pip')
+      ? normalizedToPixels(this.config.screen, output)
+      : full;
     if (!screenReady) { this.drawCamera(full); return; }
-    if (!cameraReady) { this.drawScreen(full); return; }
+    if (!cameraReady) { this.drawScreen(screenTarget); return; }
 
     switch (this.config.layout) {
-      case 'screen': this.drawScreen(full); break;
+      case 'screen': this.drawScreen(screenTarget); break;
       case 'camera': this.drawCamera(full); break;
       case 'pip':
-        this.drawScreen(full);
+        this.drawScreen(screenTarget);
         this.drawCamera(normalizedToPixels(this.config.pip, output), true);
         break;
       case 'split': {

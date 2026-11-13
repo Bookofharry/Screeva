@@ -7,6 +7,7 @@ import type { ChunkIngestionService } from './services/chunks.js';
 import type { FinalizationService } from './services/finalization.js';
 import type { RecoveryService } from './services/recovery.js';
 import type { SessionActivityRegistry } from './services/session-activity.js';
+import type { SessionOperationLock } from './services/session-operation-lock.js';
 import type { MetadataStore } from './storage/database.js';
 
 export interface AppOptions {
@@ -16,6 +17,7 @@ export interface AppOptions {
   finalization?: FinalizationService;
   recovery?: RecoveryService;
   activity?: SessionActivityRegistry;
+  locks?: SessionOperationLock;
   clientDirectory?: string;
 }
 
@@ -40,7 +42,7 @@ export function createApp(options: AppOptions) {
     }
     jsonParser(req, res, next);
   });
-  app.use('/api/v1', apiRoutes(options.store, token, options.chunks, options.finalization, options.recovery, options.activity, options.expectedHost));
+  app.use('/api/v1', apiRoutes(options.store, token, options.chunks, options.finalization, options.recovery, options.activity, options.expectedHost, options.locks));
   if (options.clientDirectory) {
     app.use(express.static(path.resolve(options.clientDirectory), { dotfiles: 'deny', etag: false, lastModified: false, redirect: false }));
   }

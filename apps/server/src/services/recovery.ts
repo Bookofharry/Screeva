@@ -152,7 +152,13 @@ export function createRecoveryService(
         contiguousChunkCount: 0, verifiedBytes: 0, activeOperation: true, recoverable: false,
         message: 'Recording, upload, or finalization activity is still active.' });
     }
-    const attempt = await locks.tryRun(sessionId, () => inspectLocked(sessionId));
+    const attempt = await locks.tryRun(sessionId, async () => {
+      if (!activity.isActive(sessionId)) return inspectLocked(sessionId);
+      const current = store.findSession(sessionId) ?? session;
+      return result(current, { condition: 'active', committedChunkCount: current.chunks.committedCount,
+        contiguousChunkCount: 0, verifiedBytes: 0, activeOperation: true, recoverable: false,
+        message: 'Recording, upload, or finalization activity is still active.' });
+    });
     if (attempt.acquired) return attempt.value;
     const current = store.findSession(sessionId) ?? session;
     return result(current, { condition: 'active', committedChunkCount: current.chunks.committedCount,
@@ -184,6 +190,7 @@ export function createRecoveryService(
       const task = (async () => {
       if (activity.isActive(sessionId)) throw new RecoveryError(409, 'CONFLICT', 'The session is still active. Stop recording before recovery.');
       const attempt = await locks.tryRun(sessionId, async () => {
+        if (activity.isActive(sessionId)) throw new RecoveryError(409, 'CONFLICT', 'The session is still active. Stop recording before recovery.');
         const inspection = await inspectLocked(sessionId);
         if (inspection.condition === 'completed' && inspection.output) return { completed: inspection.output } as const;
         if (!inspection.recoverable || inspection.contiguousChunkCount === 0) {

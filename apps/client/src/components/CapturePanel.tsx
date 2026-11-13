@@ -8,11 +8,13 @@ import { AudioMixerPanel } from './AudioMixerPanel.js';
 import { RecordingPanel } from './RecordingPanel.js';
 import { Icon, type IconName } from '../ui/Icon.js';
 import { DEFAULT_COMPOSITION, type CompositionLayout, type ResolutionPreset } from '../media/compositor.js';
+import { DEFAULT_AUDIO_BITS_PER_SECOND, DEFAULT_VIDEO_BITS_PER_SECOND } from '../media/recording-engine.js';
 import type { RecordingConfiguration } from '../../../../packages/shared/src/index.js';
 import type { CaptureSummary, RecordingStatusSummary, StudioViewId } from '../ui/shell-status.js';
 
 export interface BusyInputs { camera: boolean; microphone: boolean }
 interface CapturePanelProps {
+  durableAvailable?: boolean | undefined;
   cameraId: string;
   microphoneId: string;
   cameraDevices?: DeviceOption[] | undefined;
@@ -39,6 +41,7 @@ function describeSettings(track: TrackDetails): string {
 }
 
 export function CapturePanel({
+  durableAvailable = false,
   cameraId,
   microphoneId,
   cameraDevices = [],
@@ -137,6 +140,7 @@ export function CapturePanel({
             onConfigChange={setComposition}
           />
           <RecordingPanel
+            durableAvailable={durableAvailable}
             video={composedVideo}
             audio={mixedAudio}
             activeView={activeView}
@@ -147,8 +151,8 @@ export function CapturePanel({
               layout: composition.layout,
               resolution: composition.resolution,
               fps: 30,
-              videoBitsPerSecond: 2_000_000,
-              audioBitsPerSecond: 96_000,
+              videoBitsPerSecond: DEFAULT_VIDEO_BITS_PER_SECOND,
+              audioBitsPerSecond: DEFAULT_AUDIO_BITS_PER_SECOND,
               audioMode,
             }}
           />

@@ -4,10 +4,12 @@ import { checkWriteAccess, loadCapabilities } from '../api.js';
 import { Banner } from '../ui/Banner.js';
 import { Icon } from '../ui/Icon.js';
 import { StatusPill } from '../ui/StatusPill.js';
+import { recordingDocumentTitle } from '../ui/recording-ui.js';
 import {
   DEFAULT_STUDIO_VIEW,
   STUDIO_VIEWS,
   deriveGlobalShellStatus,
+  formatClockDuration,
   initialCaptureSummary,
   initialRecordingStatusSummary,
   parseViewFromHash,
@@ -135,6 +137,20 @@ export function AppShell() {
     activeView,
   });
 
+  const recordingDuration = recordingStatus.durable.status !== 'idle'
+    ? recordingStatus.durable.durationMs
+    : recordingStatus.temporary.durationMs;
+
+  useEffect(() => {
+    document.title = recordingDocumentTitle(
+      shellStatus.activityState,
+      formatClockDuration(recordingDuration),
+    );
+    return () => {
+      document.title = 'Screeva — Your Screen. Your Studio.';
+    };
+  }, [recordingDuration, shellStatus.activityState]);
+
   const currentView = STUDIO_VIEWS.find(view => view.id === activeView) ?? DEFAULT_STUDIO_VIEW;
 
   return (
@@ -258,6 +274,7 @@ export function AppShell() {
           hidden={activeView !== 'studio'}
         >
           <DeviceSetupPanel
+            durableAvailable={shellStatus.serviceState === 'connected' && capabilities?.recording === true}
             activeView={activeView}
             settingsPortal={settingsPortal}
             onOpenSettings={() => selectView('settings')}

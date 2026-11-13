@@ -211,7 +211,7 @@ export function deriveGlobalShellStatus(input: {
         break;
       case 'recording':
         activityState = 'recording';
-        activityLabel = `Recording · ${formatClockDuration(durationMs)}`;
+        activityLabel = `● REC · ${formatClockDuration(durationMs)}`;
         activityTone = 'recording';
         isRecordingOrSaving = true;
         break;
@@ -267,7 +267,7 @@ export function deriveGlobalShellStatus(input: {
         break;
       case 'recording':
         activityState = 'recording';
-        activityLabel = `Recording · ${formatClockDuration(durationMs)}`;
+        activityLabel = `● REC · ${formatClockDuration(durationMs)}`;
         activityTone = 'recording';
         isRecordingOrSaving = true;
         break;

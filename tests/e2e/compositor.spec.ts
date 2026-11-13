@@ -130,6 +130,33 @@ test('PIP can be moved and resized by pointer without escaping normalized bounds
   await page.mouse.down(); await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 60, resizeBox.y + resizeBox.height / 2 + 25); await page.mouse.up();
   expect(Number(await width.inputValue())).toBeGreaterThan(beforeWidth);
   expect(Number(await x.inputValue()) + Number(await width.inputValue())).toBeLessThanOrEqual(100);
+
+  const screenWidth = page.getByLabel('Screen view width');
+  const screenX = page.getByLabel('Screen horizontal position');
+  expect(Number(await screenWidth.inputValue())).toBe(100);
+  const resizeScreen = page.getByRole('button', { name: 'Resize screen view' });
+  await resizeScreen.scrollIntoViewIfNeeded();
+  const resizeScreenBox = await resizeScreen.boundingBox();
+  if (!resizeScreenBox) throw new Error('Screen resize handle missing');
+  await page.mouse.move(resizeScreenBox.x + resizeScreenBox.width / 2, resizeScreenBox.y + resizeScreenBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(resizeScreenBox.x + resizeScreenBox.width / 2 - 140, resizeScreenBox.y + resizeScreenBox.height / 2 - 90);
+  await page.mouse.up();
+  expect(Number(await screenWidth.inputValue())).toBeLessThan(100);
+
+  const moveScreen = page.getByRole('button', { name: 'Move screen view' });
+  const moveScreenBox = await moveScreen.boundingBox();
+  if (!moveScreenBox) throw new Error('Screen move handle missing');
+  await page.mouse.move(moveScreenBox.x + moveScreenBox.width / 2, moveScreenBox.y + moveScreenBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(moveScreenBox.x + moveScreenBox.width / 2 + 60, moveScreenBox.y + moveScreenBox.height / 2 + 30);
+  await page.mouse.up();
+  expect(Number(await screenX.inputValue())).toBeGreaterThan(0);
+
+  await page.getByRole('button', { name: 'Reset screen view' }).click();
+  expect(Number(await screenWidth.inputValue())).toBe(100);
+  expect(Number(await screenX.inputValue())).toBe(0);
+
   await page.getByRole('button', { name: 'Stop all capture' }).click();
 });
 

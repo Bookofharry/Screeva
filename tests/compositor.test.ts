@@ -19,6 +19,7 @@ class Video {
 }
 class Context {
   fillStyle: string | CanvasGradient | CanvasPattern = ''; font = ''; textAlign: CanvasTextAlign = 'start'; textBaseline: CanvasTextBaseline = 'alphabetic';
+  imageSmoothingEnabled?: boolean; imageSmoothingQuality?: ImageSmoothingQuality;
   fills: unknown[][] = []; texts: unknown[][] = []; draws: unknown[][] = []; saves = 0; restores = 0; clips = 0;
   fillRect(...args: number[]) { this.fills.push(args); }
   fillText(...args: [string, number, number]) { this.texts.push(args); }
@@ -77,7 +78,20 @@ test('engine renders screen contain plus camera PIP cover using exact geometry',
   assert.deepEqual(draws[0]?.slice(1), [0, 0, 1280, 720]);
   assert.deepEqual(draws[1]?.slice(1), [0, 60, 640, 360, 640, 360, 320, 180]);
   assert.equal(f.canvas.context.clips > 0, true);
+  assert.equal(f.canvas.context.imageSmoothingEnabled, true);
+  assert.equal(f.canvas.context.imageSmoothingQuality, 'high');
   assert.equal(screen.track.stops, 0); assert.equal(camera.track.stops, 0);
+});
+
+test('screen view can be resized and positioned in normalized stage coordinates', t => {
+  const f = fixture(); t.after(() => f.compositor.dispose());
+  const screen = new Stream();
+  f.screenVideo.videoWidth = 1920; f.screenVideo.videoHeight = 1080;
+  f.compositor.setSources({ screen: screen as unknown as MediaStream, camera: null });
+  f.compositor.setConfig({ layout: 'pip', screen: { x: 0.1, y: 0.1, width: 0.5, height: 0.5 } });
+  assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [128, 72, 640, 360]);
+  f.compositor.setConfig({ layout: 'screen', screen: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 } });
+  assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [320, 180, 640, 360]);
 });
 
 test('screen-only letterboxes and camera-only uses centered cover crop', t => {

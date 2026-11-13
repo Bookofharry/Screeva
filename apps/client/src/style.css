@@ -200,10 +200,21 @@ button:disabled { background: var(--color-disabled-bg); color: var(--color-disab
 .stage-settings-pill { display: inline-flex; align-items: center; gap: 6px; }
 .stage-floating-trigger { position: absolute; top: 12px; right: 12px; z-index: 4; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 1px solid var(--border-strong); background: rgb(12 10 22 / 86%); backdrop-filter: blur(8px); color: var(--text); box-shadow: var(--shadow-pop); display: inline-flex; align-items: center; justify-content: center; transition: transform var(--duration-fast), border-color var(--duration-fast), background-color var(--duration-fast), color var(--duration-fast); }
 .stage-floating-trigger:hover:not(:disabled) { background: var(--color-surface-hover); border-color: var(--color-primary); color: var(--color-primary-text); transform: scale(1.04); }
-.pip-editor { position: absolute; border: 2px solid var(--color-primary); border-radius: 7px; pointer-events: none; }
+.pip-editor { position: absolute; z-index: 3; border: 2px solid var(--color-primary); border-radius: 7px; pointer-events: none; }
 .pip-move { position: absolute; inset: 0; width: 100%; background: transparent; color: transparent; border-radius: 5px; cursor: move; pointer-events: auto; }
 .pip-move:hover:not(:disabled) { background: rgb(155 92 255 / 14%); color: transparent; }
 .pip-resize { position: absolute; right: -8px; bottom: -8px; width: 44px; height: 44px; padding: 0; background: var(--color-primary); color: var(--color-on-primary); border: 2px solid var(--color-on-primary); border-radius: 50%; pointer-events: auto; cursor: nwse-resize; display: inline-flex; align-items: center; justify-content: center; }
+
+.screen-editor { position: absolute; z-index: 2; border: 2px dashed rgb(0 229 195 / 45%); border-radius: 7px; pointer-events: none; transition: border-color var(--duration-fast); }
+.screen-editor--custom { border-style: solid; border-color: var(--color-accent); }
+.screen-editor__controls { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 6px; pointer-events: auto; }
+.screen-move, .screen-reset { min-height: 30px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--live-border); background: rgb(12 10 22 / 86%); backdrop-filter: blur(8px); color: var(--color-accent); font-size: 11px; font-weight: 650; pointer-events: auto; }
+.screen-move { cursor: move; }
+.screen-move:hover:not(:disabled), .screen-reset:hover:not(:disabled) { background: var(--color-surface-hover); border-color: var(--color-accent); color: var(--text); }
+.screen-resize { position: absolute; right: 6px; bottom: 6px; width: 44px; height: 44px; padding: 0; background: var(--color-accent); color: var(--color-on-accent); border: 2px solid var(--bg); border-radius: 50%; pointer-events: auto; cursor: nwse-resize; display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow-pop); }
+.screen-resize:hover:not(:disabled) { background: var(--color-accent); color: var(--color-on-accent); transform: scale(1.04); }
+.split-resize { position: absolute; top: 50%; z-index: 3; width: 44px; height: 44px; padding: 0; transform: translate(-50%, -50%); background: var(--color-accent); color: var(--color-on-accent); border: 2px solid var(--bg); border-radius: 50%; cursor: ew-resize; display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow-pop); }
+.split-resize:hover:not(:disabled) { background: var(--color-accent); color: var(--color-on-accent); }
 
 .scene-modal-backdrop { position: fixed; inset: 0; z-index: 200; background: var(--color-overlay); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 20px; }
 .scene-modal-backdrop[hidden] { display: none !important; }
@@ -225,7 +236,7 @@ button:disabled { background: var(--color-disabled-bg); color: var(--color-disab
 .recorder-readiness-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-2); }
 
 /* ---------- Main Stage: Docked Recording Bar ---------- */
-.recording-panel { background: var(--surface-2); border-color: var(--border-input); }
+.recording-panel { position: sticky; bottom: 12px; z-index: 12; background: var(--surface-2); border-color: var(--border-input); box-shadow: 0 12px 32px color-mix(in srgb, var(--color-bg) 78%, transparent); }
 .recording-dock__primary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .recording-dock__status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .recording-clock { display: inline-flex; align-items: baseline; gap: 8px; margin: 0; color: var(--text-muted); font-size: 12px; }
@@ -235,6 +246,17 @@ button:disabled { background: var(--color-disabled-bg); color: var(--color-disab
 .record-trigger:hover:not(:disabled) { background: var(--record-button-hover); color: var(--text); }
 .record-trigger:disabled { background: var(--color-disabled-bg); color: var(--color-disabled-text); border-color: var(--color-border); }
 .recording-active { color: var(--record-text); border-color: var(--color-recording); }
+.recording-rec { background: color-mix(in srgb, var(--color-recording) 14%, var(--surface-1)); font-weight: 750; letter-spacing: .04em; }
+.recording-countdown { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--color-primary-border); border-radius: 10px; background: var(--surface-1); }
+.recording-countdown strong { color: var(--color-primary-hover); font-size: 18px; }
+.recording-countdown span { color: var(--text-muted); font-size: 12px; }
+.recording-countdown__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.recording-countdown-option { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-1); cursor: pointer; }
+.recording-countdown-option input { margin-top: 2px; accent-color: var(--color-primary); }
+.recording-countdown-option span { display: grid; gap: 2px; }
+.recording-countdown-option strong { color: var(--text); font-size: 12px; }
+.recording-countdown-option small { color: var(--text-muted); font-size: 11px; }
+.recording-panel > .ui-banner, .recording-panel > .ui-progress { margin-top: 12px; }
 
 .recording-dock__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .recording-dock__config { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; padding-top: 10px; }

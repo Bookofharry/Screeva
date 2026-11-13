@@ -5,6 +5,7 @@ import type { CaptureSummary, RecordingStatusSummary, StudioViewId } from '../ui
 import { CapturePanel, type BusyInputs } from './CapturePanel.js';
 
 export interface DeviceSetupPanelProps {
+  durableAvailable?: boolean | undefined;
   activeView?: StudioViewId | undefined;
   settingsPortal?: HTMLElement | null | undefined;
   onOpenSettings?: (() => void) | undefined;
@@ -20,6 +21,7 @@ const permissionLabels: Record<AccessState, string> = {
 };
 
 export function DeviceSetupPanel({
+  durableAvailable = false,
   activeView = 'studio',
   settingsPortal = null,
   onOpenSettings,
@@ -130,6 +132,7 @@ export function DeviceSetupPanel({
     <>
       {settingsPortal ? createPortal(setupSection, settingsPortal) : null}
       <CapturePanel
+        durableAvailable={durableAvailable}
         cameraId={state.camera.selectedId}
         microphoneId={state.microphone.selectedId}
         cameraDevices={state.camera.devices}

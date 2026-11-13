@@ -257,3 +257,91 @@ test('sustained high-water backpressure stops encoding before the bounded queue 
     await controller.dispose(); await running.close(); await rm(root, { recursive: true, force: true });
   }
 });
+
+test('dispose during delayed session creation ignores the late response without resurrecting transport or encoder state', async () => {
+  const recorder = recorderHarness();
+  const video = new Track('video');
+  let releaseSession!: (response: Response) => void;
+  const delayedSession = new Promise<Response>(resolve => { releaseSession = resolve; });
+  let sessionRequested = false;
+  let heartbeatCalls = 0;
+  let transportCreations = 0;
+  let nextTimer = 0;
+  const timers = new Map<number, ReturnType<typeof setTimeout>>();
+  const runtime: DurableRecordingRuntime = {
+    fetch: async input => {
+      if (input.endsWith('/bootstrap')) return new Response(JSON.stringify({ apiVersion: 'v1', ok: true, data: { writeToken: 'a'.repeat(43) } }));
+      if (input.endsWith('/sessions')) { sessionRequested = true; return delayedSession; }
+      if (input.endsWith('/heartbeat')) { heartbeatCalls++; throw new Error('late heartbeat must not run'); }
+      throw new Error(`Unexpected request: ${input}`);
+    },
+    setTimer: (callback, milliseconds) => {
+      const id = ++nextTimer;
+      timers.set(id, setTimeout(() => { timers.delete(id); callback(); }, milliseconds));
+      return id;
+    },
+    clearTimer: id => { const timer = timers.get(id); if (timer) clearTimeout(timer); timers.delete(id); },
+  };
+  const controller = new DurableRecordingEngine({
+    engine: recorder.engine, runtime,
+    createTransport: () => { transportCreations++; throw new Error('late session must not create a transport'); },
+  });
+  const starting = controller.start(media(new Stream([video])), null, 'Late response fixture', configuration);
+  await eventually(() => assert.equal(sessionRequested, true));
+  await controller.dispose();
+  releaseSession(new Response(JSON.stringify({ apiVersion: 'v1', ok: true, data: {
+    schemaVersion: 1, id: '123e4567-e89b-42d3-a456-426614174000', title: 'Late response fixture', status: 'idle',
+    createdAt: '2026-11-13T00:00:00.000Z', updatedAt: '2026-11-13T00:00:00.000Z', configuration,
+    chunks: { committedCount: 0, committedBytes: 0, nextSequence: 0 }, output: null,
+  } })));
+  assert.equal(await starting, false);
+  assert.equal(transportCreations, 0);
+  assert.equal(heartbeatCalls, 0);
+  assert.equal(recorder.recorders.length, 0);
+  assert.equal(video.stops, 0);
+});
+
+test('periodic heartbeat treats a busy session lock as transient without hiding initial lease failure', async () => {
+  const recorder = recorderHarness();
+  const video = new Track('video');
+  let heartbeatCalls = 0;
+  let nextTimer = 0;
+  const timers = new Map<number, { callback: () => void; milliseconds: number }>();
+  const inertTransport = {
+    state: { status: 'idle', queuedItems: 0, outstandingBytes: 0, pendingItems: 0, pendingBytes: 0, maxItems: 2, maxBytes: 100,
+      attempts: 0, totalAttempts: 0, acknowledgedChunks: 0, activeSequence: null, retryDelayMs: 0, backpressured: false, error: '' } as const,
+    start: () => true, enqueue: async () => undefined, drain: async () => 0,
+    getSnapshot() { return this.state; }, subscribe: () => () => undefined, dispose: async () => undefined,
+  };
+  const runtime: DurableRecordingRuntime = {
+    fetch: async input => {
+      if (input.endsWith('/bootstrap')) return new Response(JSON.stringify({ apiVersion: 'v1', ok: true, data: { writeToken: 'a'.repeat(43) } }));
+      if (input.endsWith('/sessions')) return new Response(JSON.stringify({ apiVersion: 'v1', ok: true, data: {
+        schemaVersion: 1, id: '123e4567-e89b-42d3-a456-426614174000', title: 'Heartbeat fixture', status: 'idle',
+        createdAt: '2026-11-13T00:00:00.000Z', updatedAt: '2026-11-13T00:00:00.000Z', configuration,
+        chunks: { committedCount: 0, committedBytes: 0, nextSequence: 0 }, output: null,
+      } }));
+      if (input.endsWith('/heartbeat')) {
+        heartbeatCalls++;
+        if (heartbeatCalls === 2) return new Response(JSON.stringify({ apiVersion: 'v1', ok: false,
+          error: { code: 'CONFLICT', message: 'Session operation is busy.' } }), { status: 409 });
+        return new Response(JSON.stringify({ apiVersion: 'v1', ok: true, data: { active: true, expiresAt: '2026-11-13T00:00:10.000Z' } }));
+      }
+      throw new Error(`Unexpected request: ${input}`);
+    },
+    setTimer: (callback, milliseconds) => { const id = ++nextTimer; timers.set(id, { callback, milliseconds }); return id; },
+    clearTimer: id => { timers.delete(id); },
+  };
+  const controller = new DurableRecordingEngine({ engine: recorder.engine, runtime, createTransport: () => inertTransport });
+  assert.equal(await controller.start(media(new Stream([video])), null, 'Heartbeat fixture', configuration), true);
+  assert.equal(heartbeatCalls, 1, 'initial heartbeat is mandatory');
+  const periodic = [...timers.values()].find(timer => timer.milliseconds === 3_000);
+  assert.ok(periodic);
+  periodic.callback();
+  await eventually(() => assert.equal(heartbeatCalls, 2));
+  assert.equal(controller.getSnapshot().status, 'recording');
+  assert.equal(recorder.recorders[0]?.stops, 0);
+  assert.equal(video.stops, 0);
+  assert.ok([...timers.values()].some(timer => timer.milliseconds === 3_000), 'busy heartbeat schedules the next lease attempt');
+  await controller.dispose();
+});

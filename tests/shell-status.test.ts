@@ -126,7 +126,7 @@ test('derives capture, recording, upload, retry, finalization, saved, and failed
     activeView: 'recovery',
   });
   assert.equal(recordingDurable.activityState, 'recording');
-  assert.equal(recordingDurable.activityLabel, 'Recording · 00:14');
+  assert.equal(recordingDurable.activityLabel, '● REC · 00:14');
   assert.equal(recordingDurable.activityTone, 'recording');
   assert.equal(recordingDurable.isRecordingOrSaving, true);
   assert.match(recordingDurable.backgroundBanner?.title ?? '', /Recording continues in Studio \(00:14\)/);

@@ -48,8 +48,8 @@ export interface RecordingChunkSink {
 }
 
 export const DEFAULT_RECORDING_MEMORY_LIMIT = 128 * 1024 * 1024;
-export const DEFAULT_VIDEO_BITS_PER_SECOND = 2_000_000;
-export const DEFAULT_AUDIO_BITS_PER_SECOND = 96_000;
+export const DEFAULT_VIDEO_BITS_PER_SECOND = 8_000_000;
+export const DEFAULT_AUDIO_BITS_PER_SECOND = 128_000;
 export const RECORDING_MIME_CANDIDATES = [
   'video/webm;codecs=vp9,opus',
   'video/webm;codecs=vp8,opus',

@@ -1,6 +1,6 @@
 # TASKS.md — Implementation tracker
 
-> Phase 1, Phase 2 Tasks 1–6, Phase 3 Tasks 1–4, Phase 3 Tasks 5A–5B and Phase 3 Task 6 (interrupted-session recovery) implementation are locally verified on Windows through 2026-11-11. Task 5A's real FFprobe media acceptance remains pending because FFprobe/FFmpeg were unavailable. Verification details distinguish synthetic tests, external-tool acceptance, physical hardware and configured remote CI.
+> Phase 1, Phase 2 Tasks 1–6 and Phase 3 Tasks 1–7 are locally verified on Windows through 2026-11-13. The real browser-generated multi-chunk WebM finalization gate passed with a hash-verified trusted FFprobe 9.0.1 build. Verification details distinguish deterministic fault injection and real-media probing from physical hardware, power-loss and configured remote-CI acceptance.
 
 ## Phase 1 — Foundation
 - [x] Retain Local Creator Recorder as the working name; choose MIT source license and review declared dependency licenses. Release-name clearance remains open.
@@ -26,9 +26,9 @@
 - [x] Ordered authenticated client transport with bounded retry scheduling and backpressure signaling.
 - [x] Implement secure ordered WebM finalization, output metadata and restart reconciliation.
 - [x] Integrate live MediaRecorder chunks with persistent sessions, bounded delivery, durable ACK drain and finalization-gated Saved UI.
-- [ ] Run the actual browser-produced multi-chunk WebM finalization acceptance with FFprobe (tool unavailable in this environment).
-- [x] Interrupted session detection and best-effort salvage UI. Verified with deterministic server tests and a Chromium UI test using a synthetic probe; real-FFprobe salvage remains covered by the open acceptance item above.
-- [ ] Failure-injection tests for crash/network/disk/device loss.
+- [x] Run the actual browser-produced multi-chunk WebM finalization acceptance with trusted FFprobe. Verified on 2026-11-13 with Chromium-generated multi-chunk WebM and hash-verified Gyan FFprobe 9.0.1; 1 passed, 0 skipped.
+- [x] Interrupted session detection and best-effort salvage UI. Verified with deterministic server tests and a Chromium UI test; salvage delegates to the same finalizer whose real-FFprobe media gate is now accepted.
+- [x] Deterministic fault-injection and resilience acceptance for interruption, network/ACK ambiguity, disk/SQLite failures, reload/source loss, token rotation, corrupt storage, concurrency, reconciliation and bounded queues. Real power-loss/hardware acceptance remains external.
 
 ## Phase 4 — Intelligent presentation
 - [ ] Add local face detector with performance sampling.
@@ -111,9 +111,21 @@
 - Changed files: `UX_DESIGN.md`, `TASKS.md`, `TASKS_UX_SECTION.md`, `README.md`, `PRD.md`, `apps/client/src/ui/tokens.css`, `apps/client/src/ui/{Button,StatusPill,Banner,Disclosure,ProgressBar,LevelMeter,Icon}.tsx`, `apps/client/src/style.css`, `tests/design-tokens.test.ts`, `tests/ui-primitives.test.ts`. No application screen/layout refactor has been applied yet.
 
 ## Active task
-**Current milestone:** Phase 3 — reliability (in progress).  
-**Completed:** Tasks 1–4, Tasks 5A–5B and Task 6 implementation — persistent sessions, bounded chunk delivery, durable server ingestion, retrying transport, secure finalization, live durable recording integration and acknowledged-chunk recovery. Phase 1 and all six Phase 2 tasks remain implemented.  
-**Acceptance still open:** rerun the conditional actual multi-chunk WebM finalization test on a machine with trusted FFprobe available (this also gates real salvage completion). Failure-injection tests, browser-queue persistence and export remain unimplemented.
+**Current milestone:** UX Improvement Milestone — UX-3 recording actions and truthful statuses.
+
+**Completed:** Phase 3 Tasks 1–7 — persistent sessions, bounded chunk delivery, durable server ingestion, retrying transport, secure real-FFprobe finalization, live durable recording integration, acknowledged-chunk recovery and deterministic fault injection. Phase 1 and all six Phase 2 tasks remain implemented.
+
+**External validation still open:** physical hardware/system audio, Edge, remote CI, actual disk exhaustion, OS termination, sudden power loss and the Phase 6 soak remain separate acceptance work. Browser-queue persistence and export remain unimplemented.
+
+## Verified Phase 3 Task 7 implementation (fault injection) — 2026-11-13
+- Added `tests/fault-injection.test.ts` and `npm run test:faults`. The deterministic matrix covers disk-full publication failure, SQLite commit failure, held-upload concurrency with heartbeat/salvage/finalization, corrupt and missing sidecars, malformed-media probe rejection, stale tokens and repeated restart reconciliation. Existing fault suites included by the command cover interrupted streaming requests, lost ACKs, timeouts, retry exhaustion, queue saturation, browser reload, source loss, corrupt/missing media and borrowed-track ownership.
+- Fixed one revealed race: authenticated heartbeat now takes the same non-blocking per-session operation lock as ingestion/finalization/recovery and returns 409 when busy. Recovery inspection and salvage recheck activity after lock acquisition. Periodic client heartbeat treats only this busy conflict as transient and retries the next lease interval; its mandatory initial lease still fails closed. A held upload proves that sidecar publication alone cannot yield an ACK, heartbeat or salvage, while finalization waits for SQLite commit.
+- Added a delayed-session-response disposal regression: a late successful create response cannot start heartbeat, transport or MediaRecorder after browser teardown and never stops the borrowed source track.
+- The initial real-media attempt was skipped while no trusted binary was available. A Gyan FFmpeg Essentials 9.0.1 archive was then obtained from the Winget-manifested release URL, matched Winget SHA-256 `fec81ae03971d9dd4be3ebe02e263bd2ec1d789483f931bdba5f5715e65da2e9`, and installed outside the repository under the user-local Programs directory with absolute user-level `FFPROBE_PATH`/`FFMPEG_PATH`. The actual Chromium-generated multi-chunk WebM finalization test passed with real FFprobe; no synthetic adapter result is counted as that acceptance. The external GPL-3.0 tool is not an npm/runtime dependency and does not change the repository's MIT source license.
+- With the real probe configured, `npm run test:faults` passed **82/82** and `npm run check` passed typecheck, lint, **284/284** tests and production build, with **0 skips**. `npm run test:e2e` remains passed at **37 Chromium tests**.
+- Reproducible evidence and the full simulated-versus-external limitation matrix are in `reports/phase3-task7-fault-injection.md`.
+- Changed files: `package.json`, `apps/server/src/app.ts`, `apps/server/src/server.ts`, `apps/server/src/routes/api.ts`, `apps/server/src/services/recovery.ts`, `apps/client/src/media/durable-recording-engine.ts`, `tests/fault-injection.test.ts`, `tests/durable-recording-engine.test.ts`, `reports/phase3-task7-fault-injection.md`, ARCHITECTURE, DECISIONS and TASKS.
+- No dependencies, MP4/export behavior, persistent browser queue, AI tracking or smart zoom were added. Physical hardware, Edge, remote CI, actual disk exhaustion, OS process termination, sudden power loss and two-hour soak were not run.
 
 ## Verified Phase 3 Task 6 implementation (interrupted-session recovery) — 2026-11-11
 - Recorded retroactively: the implementation and ADR-023 already existed, but this tracker was not updated when they landed. This entry records a verification rerun on 2026-11-11, not the original implementation session.

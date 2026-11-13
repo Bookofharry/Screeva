@@ -7,10 +7,11 @@ import { createSession, getSession, listSessions } from '../services/sessions.js
 import { FinalizationError, type FinalizationService } from '../services/finalization.js';
 import { RecoveryError, type RecoveryService } from '../services/recovery.js';
 import type { SessionActivityRegistry } from '../services/session-activity.js';
+import type { SessionOperationLock } from '../services/session-operation-lock.js';
 import type { MetadataStore } from '../storage/database.js';
 
 export function apiRoutes(store: MetadataStore, token: string, chunks?: ChunkIngestionService, finalization?: FinalizationService,
-  recovery?: RecoveryService, activity?: SessionActivityRegistry, expectedHost: () => string = () => ''): Router {
+  recovery?: RecoveryService, activity?: SessionActivityRegistry, expectedHost: () => string = () => '', locks?: SessionOperationLock): Router {
   const router = Router();
   router.get('/capabilities', (_req, res) => {
     res.json(success(getCapabilities(store)));
@@ -88,18 +89,29 @@ export function apiRoutes(store: MetadataStore, token: string, chunks?: ChunkIng
     });
   }
   if (activity) {
-    router.post('/sessions/:id/heartbeat', (req, res) => {
+    router.post('/sessions/:id/heartbeat', async (req, res, next) => {
       const id = sessionIdSchema.safeParse(req.params.id);
       if (!req.is('application/json')) { res.status(415).json(failure('UNSUPPORTED_MEDIA_TYPE', 'Use application/json.')); return; }
       if (!id.success || !recoveryHeartbeatInputSchema.safeParse(req.body).success) {
         res.status(400).json(failure('INVALID_REQUEST', 'Expected a valid session ID and empty JSON object.')); return;
       }
-      const session = store.findSession(id.data);
-      if (!session) { res.status(404).json(failure('NOT_FOUND', 'Session not found.')); return; }
-      if (!['idle', 'preview', 'recording', 'paused'].includes(session.status)) {
-        res.status(409).json(failure('CONFLICT', 'Session lifecycle cannot be marked active.')); return;
-      }
-      res.json(success(activity.touch(id.data)));
+      try {
+        const touch = () => {
+          const session = store.findSession(id.data);
+          if (!session) return { status: 404, body: failure('NOT_FOUND' as const, 'Session not found.') };
+          if (!['idle', 'preview', 'recording', 'paused'].includes(session.status)) {
+            return { status: 409, body: failure('CONFLICT' as const, 'Session lifecycle cannot be marked active.') };
+          }
+          return { status: 200, body: success(activity.touch(id.data)) };
+        };
+        if (!locks) { const outcome = touch(); res.status(outcome.status).json(outcome.body); return; }
+        const attempt = await locks.tryRun(id.data, async () => touch());
+        if (!attempt.acquired) {
+          res.status(409).json(failure('CONFLICT', 'The session has an active upload, finalization, or recovery operation.'));
+          return;
+        }
+        res.status(attempt.value.status).json(attempt.value.body);
+      } catch (error) { next(error); }
     });
   }
   router.get('/sessions/:id', (req, res) => {

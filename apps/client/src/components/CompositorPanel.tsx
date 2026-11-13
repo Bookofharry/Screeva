@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { CanvasCompositor, DEFAULT_COMPOSITION, RESOLUTIONS, clampNormalizedRect, type CompositionLayout, type NormalizedRect, type ResolutionPreset } from '../media/compositor.js';
+import {
+  CanvasCompositor,
+  DEFAULT_COMPOSITION,
+  DEFAULT_SCREEN_RECT,
+  RESOLUTIONS,
+  clampNormalizedRect,
+  type CompositionLayout,
+  type NormalizedRect,
+  type ResolutionPreset,
+} from '../media/compositor.js';
 import { Icon } from '../ui/Icon.js';
 
 interface CompositorPanelProps {
@@ -9,7 +18,8 @@ interface CompositorPanelProps {
   onOutputChange?: (stream: MediaStream | null) => void;
   onConfigChange?: (config: { layout: CompositionLayout; resolution: ResolutionPreset }) => void;
 }
-type DragMode = 'move' | 'resize';
+type DragMode = 'move' | 'resize' | 'split';
+type DragTarget = 'pip' | 'screen' | 'split';
 
 const layoutPresets: ReadonlyArray<{ id: CompositionLayout; label: string; shortLabel: string }> = [
   { id: 'pip', label: 'Picture in picture', shortLabel: 'PIP' },
@@ -27,10 +37,19 @@ export function CompositorPanel({
 }: CompositorPanelProps) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const engine = useRef<CanvasCompositor | null>(null);
-  const pointer = useRef<{ mode: DragMode; id: number; x: number; y: number; rect: NormalizedRect } | null>(null);
+  const pointer = useRef<{
+    target: DragTarget;
+    mode: DragMode;
+    id: number;
+    x: number;
+    y: number;
+    rect: NormalizedRect;
+    split: number;
+  } | null>(null);
   const [layout, setLayout] = useState<CompositionLayout>(DEFAULT_COMPOSITION.layout);
   const [preset, setPreset] = useState<ResolutionPreset>(DEFAULT_COMPOSITION.preset);
   const [split, setSplit] = useState(DEFAULT_COMPOSITION.split);
+  const [screenRect, setScreenRect] = useState<NormalizedRect>(DEFAULT_COMPOSITION.screen);
   const [pip, setPip] = useState<NormalizedRect>(DEFAULT_COMPOSITION.pip);
   const [outputStatus, setOutputStatus] = useState('30 fps · ready');
   const [sceneModalOpen, setSceneModalOpen] = useState(false);
@@ -64,9 +83,9 @@ export function CompositorPanel({
 
   useEffect(() => { engine.current?.setSources({ screen, camera }); }, [screen, camera]);
   useEffect(() => {
-    engine.current?.setConfig({ layout, preset, split, pip });
+    engine.current?.setConfig({ layout, preset, split, screen: screenRect, pip });
     onConfigChange?.({ layout, resolution: preset });
-  }, [layout, preset, split, pip, onConfigChange]);
+  }, [layout, preset, split, screenRect, pip, onConfigChange]);
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -75,10 +94,17 @@ export function CompositorPanel({
       const bounds = stage.getBoundingClientRect();
       if (!bounds.width || !bounds.height) return;
       const dx = (event.clientX - active.x) / bounds.width; const dy = (event.clientY - active.y) / bounds.height;
+      if (active.target === 'split') {
+        const nextSplit = Math.min(0.8, Math.max(0.2, active.split + dx));
+        setSplit(nextSplit);
+        return;
+      }
+      const minSize = active.target === 'screen' ? 0.2 : 0.12;
       const next = active.mode === 'move'
-        ? clampNormalizedRect({ ...active.rect, x: active.rect.x + dx, y: active.rect.y + dy })
-        : clampNormalizedRect({ ...active.rect, width: active.rect.width + dx, height: active.rect.height + dy });
-      setPip(next);
+        ? clampNormalizedRect({ ...active.rect, x: active.rect.x + dx, y: active.rect.y + dy }, minSize)
+        : clampNormalizedRect({ ...active.rect, width: active.rect.width + dx, height: active.rect.height + dy }, minSize);
+      if (active.target === 'screen') setScreenRect(next);
+      else setPip(next);
     };
     const end = (event: PointerEvent) => { if (pointer.current?.id === event.pointerId) pointer.current = null; };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
@@ -98,14 +124,23 @@ export function CompositorPanel({
   }, [sceneModalOpen]);
 
   function changePip(next: NormalizedRect) { setPip(clampNormalizedRect(next)); }
-  function beginPointer(mode: DragMode, event: ReactPointerEvent<HTMLButtonElement>) {
+  function changeScreen(next: NormalizedRect) { setScreenRect(clampNormalizedRect(next, 0.2)); }
+  function beginPointer(target: 'pip' | 'screen', mode: 'move' | 'resize', event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
-    pointer.current = { mode, id: event.pointerId, x: event.clientX, y: event.clientY, rect: pip };
+    const rect = target === 'screen' ? screenRect : pip;
+    pointer.current = { target, mode, id: event.pointerId, x: event.clientX, y: event.clientY, rect, split };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function beginSplitPointer(event: ReactPointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    pointer.current = { target: 'split', mode: 'split', id: event.pointerId, x: event.clientX, y: event.clientY, rect: screenRect, split };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   const size = RESOLUTIONS[preset];
   const pipStyle = { left: `${pip.x * 100}%`, top: `${pip.y * 100}%`, width: `${pip.width * 100}%`, height: `${pip.height * 100}%` };
+  const screenStyle = { left: `${screenRect.x * 100}%`, top: `${screenRect.y * 100}%`, width: `${screenRect.width * 100}%`, height: `${screenRect.height * 100}%` };
+  const isScreenCustom = screenRect.x > 0.001 || screenRect.y > 0.001 || screenRect.width < 0.999 || screenRect.height < 0.999;
 
   return (
     <section className="panel compositor-panel" aria-labelledby="compositor-title">
@@ -153,9 +188,52 @@ export function CompositorPanel({
         >
           <Icon name="sliders" size={18} />
         </button>
+        {(layout === 'pip' || layout === 'screen') && screen && (
+          <div className={isScreenCustom ? 'screen-editor screen-editor--custom' : 'screen-editor'} style={screenStyle}>
+            <div className="screen-editor__controls">
+              <button
+                type="button"
+                aria-label="Move screen view"
+                className="screen-move"
+                onPointerDown={event => beginPointer('screen', 'move', event)}
+              >
+                Move screen
+              </button>
+              {isScreenCustom && (
+                <button
+                  type="button"
+                  aria-label="Reset screen view"
+                  className="screen-reset"
+                  onClick={() => changeScreen(DEFAULT_SCREEN_RECT)}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label="Resize screen view"
+              className="screen-resize"
+              onPointerDown={event => beginPointer('screen', 'resize', event)}
+            >
+              ↘
+            </button>
+          </div>
+        )}
+        {layout === 'split' && screen && camera && (
+          <button
+            type="button"
+            aria-label="Resize split screen"
+            className="split-resize"
+            style={{ left: `${split * 100}%` }}
+            onPointerDown={beginSplitPointer}
+          >
+            ↔
+          </button>
+        )}
         {layout === 'pip' && camera && <div className="pip-editor" style={pipStyle}>
-          <button aria-label="Move webcam overlay" className="pip-move" onPointerDown={event => beginPointer('move', event)}>Move webcam</button>
-          <button aria-label="Resize webcam overlay" className="pip-resize" onPointerDown={event => beginPointer('resize', event)}>↘</button>
+          <button type="button" aria-label="Move webcam overlay" className="pip-move" onPointerDown={event => beginPointer('pip', 'move', event)}>Move webcam</button>
+          <button type="button" aria-label="Resize webcam overlay" className="pip-resize" onPointerDown={event => beginPointer('pip', 'resize', event)}>↘</button>
         </div>}
       </div>
       <div
@@ -190,6 +268,14 @@ export function CompositorPanel({
               </select></label>
               {layout === 'split' && <label>Screen proportion <output>{Math.round(split * 100)}%</output><input aria-label="Screen proportion" type="range" min="20" max="80" value={Math.round(split * 100)} onChange={event => setSplit(Number(event.target.value) / 100)} /></label>}
             </div>
+            {(layout === 'pip' || layout === 'screen') && <fieldset className="pip-controls"><legend>Screen view geometry</legend>
+              <div className="pip-controls__grid">
+                <label>Horizontal <output>{Math.round(screenRect.x * 100)}%</output><input aria-label="Screen horizontal position" type="range" min="0" max={Math.round((1 - screenRect.width) * 100)} value={Math.round(screenRect.x * 100)} onChange={event => changeScreen({ ...screenRect, x: Number(event.target.value) / 100 })} /></label>
+                <label>Vertical <output>{Math.round(screenRect.y * 100)}%</output><input aria-label="Screen vertical position" type="range" min="0" max={Math.round((1 - screenRect.height) * 100)} value={Math.round(screenRect.y * 100)} onChange={event => changeScreen({ ...screenRect, y: Number(event.target.value) / 100 })} /></label>
+                <label>Width <output>{Math.round(screenRect.width * 100)}%</output><input aria-label="Screen view width" type="range" min="20" max="100" value={Math.round(screenRect.width * 100)} onChange={event => changeScreen({ ...screenRect, width: Number(event.target.value) / 100 })} /></label>
+                <label>Height <output>{Math.round(screenRect.height * 100)}%</output><input aria-label="Screen view height" type="range" min="20" max="100" value={Math.round(screenRect.height * 100)} onChange={event => changeScreen({ ...screenRect, height: Number(event.target.value) / 100 })} /></label>
+              </div>
+            </fieldset>}
             {layout === 'pip' && <fieldset className="pip-controls"><legend>Webcam overlay geometry</legend>
               <div className="pip-controls__grid">
                 <label>Horizontal <output>{Math.round(pip.x * 100)}%</output><input aria-label="Webcam horizontal position" type="range" min="0" max={Math.round((1 - pip.width) * 100)} value={Math.round(pip.x * 100)} onChange={event => changePip({ ...pip, x: Number(event.target.value) / 100 })} /></label>
