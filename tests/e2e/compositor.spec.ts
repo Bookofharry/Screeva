@@ -139,6 +139,11 @@ test('PIP and screen view can be moved and resized by pointer without escaping n
 
   const initialScreen = await getRectPercentages('.screen-editor');
   expect(initialScreen.width).toBe(100);
+  await page.getByRole('button', { name: 'Decrease screen view' }).click();
+  await expect(page.getByRole('button', { name: 'Move screen view' })).toContainText('90%');
+  await page.getByRole('button', { name: 'Increase screen view' }).click();
+  await expect(page.getByRole('button', { name: 'Move screen view' })).toContainText('100%');
+
   const resizeScreen = page.getByRole('button', { name: 'Resize screen view' });
   await resizeScreen.scrollIntoViewIfNeeded();
   const resizeScreenBox = await resizeScreen.boundingBox();
@@ -155,7 +160,7 @@ test('PIP and screen view can be moved and resized by pointer without escaping n
   if (!moveScreenBox) throw new Error('Screen move handle missing');
   await page.mouse.move(moveScreenBox.x + moveScreenBox.width / 2, moveScreenBox.y + moveScreenBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(moveScreenBox.x + moveScreenBox.width / 2 + 60, moveScreenBox.y + moveScreenBox.height / 2 + 30);
+  await page.mouse.move(moveScreenBox.x + moveScreenBox.width / 2 + 40, moveScreenBox.y + moveScreenBox.height / 2 + 25);
   await page.mouse.up();
   const movedScreen = await getRectPercentages('.screen-editor');
   expect(movedScreen.x).toBeGreaterThan(0);

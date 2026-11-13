@@ -207,9 +207,12 @@ button:disabled { background: var(--color-disabled-bg); color: var(--color-disab
 
 .screen-editor { position: absolute; z-index: 2; border: 2px dashed rgb(0 229 195 / 45%); border-radius: 7px; pointer-events: none; transition: border-color var(--duration-fast); }
 .screen-editor--custom { border-style: solid; border-color: var(--color-accent); }
-.screen-editor__controls { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 6px; pointer-events: auto; }
-.screen-move, .screen-reset { min-height: 30px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--live-border); background: rgb(12 10 22 / 86%); backdrop-filter: blur(8px); color: var(--color-accent); font-size: 11px; font-weight: 650; pointer-events: auto; }
+.screen-editor__controls { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; border: 1px solid var(--live-border); background: rgb(12 10 22 / 88%); backdrop-filter: blur(8px); box-shadow: var(--shadow-pop); pointer-events: auto; }
+.screen-step-btn { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 50%; border: 1px solid transparent; background: var(--surface-2); color: var(--color-accent); display: inline-flex; align-items: center; justify-content: center; pointer-events: auto; }
+.screen-step-btn:hover:not(:disabled) { background: var(--color-surface-hover); border-color: var(--color-accent); color: var(--text); }
+.screen-move, .screen-reset { min-height: 28px; padding: 3px 10px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--text); font: 650 11.5px var(--font-mono); display: inline-flex; align-items: center; gap: 5px; pointer-events: auto; }
 .screen-move { cursor: move; }
+.screen-reset { border-color: var(--border-input); background: var(--surface-1); color: var(--color-accent); font-family: var(--font-sans); font-size: 11px; }
 .screen-move:hover:not(:disabled), .screen-reset:hover:not(:disabled) { background: var(--color-surface-hover); border-color: var(--color-accent); color: var(--text); }
 .screen-resize { position: absolute; right: 6px; bottom: 6px; width: 44px; height: 44px; padding: 0; background: var(--color-accent); color: var(--color-on-accent); border: 2px solid var(--bg); border-radius: 50%; pointer-events: auto; cursor: nwse-resize; display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow-pop); }
 .screen-resize:hover:not(:disabled) { background: var(--color-accent); color: var(--color-on-accent); transform: scale(1.04); }
@@ -435,6 +438,8 @@ footer { display: flex; justify-content: space-between; gap: 16px; border-top: 1
 .session-card__output { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 12px; border: 1px solid var(--color-success-border); border-radius: var(--radius-s); background: var(--surface-1); color: var(--color-success); font-size: 12px; overflow-wrap: anywhere; }
 .session-card__output span { color: var(--text-muted); }
 .session-card__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.recordings-scope-note { margin: 12px 0 0; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-s); background: var(--surface-1); color: var(--text-muted); font-size: 12px; }
+.recovery-card__footer p strong { color: var(--text); font-weight: 600; }
 .empty-state { margin: 18px 0 6px; padding: 32px 24px; border: 1px dashed var(--border-strong); border-radius: var(--radius-m); background: var(--surface-2); display: grid; justify-items: center; text-align: center; gap: 8px; }
 .empty-state__icon { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--text-soft); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 4px; }
 .empty-state__icon--ok { border-color: var(--color-success-border); color: var(--color-success); }

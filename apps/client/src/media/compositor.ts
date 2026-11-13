@@ -27,14 +27,18 @@ export const DEFAULT_COMPOSITION: CompositionConfig = {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
 
-export function clampNormalizedRect(rect: NormalizedRect, minimum = 0.12): NormalizedRect {
-  const width = clamp(rect.width, minimum, 1);
-  const height = clamp(rect.height, minimum, 1);
-  return { x: clamp(rect.x, 0, 1 - width), y: clamp(rect.y, 0, 1 - height), width, height };
+export function clampNormalizedRect(rect: NormalizedRect, minimum = 0.12, maximum = 1): NormalizedRect {
+  const width = clamp(rect.width, minimum, maximum);
+  const height = clamp(rect.height, minimum, maximum);
+  const minX = Math.min(0, 1 - width);
+  const maxX = Math.max(0, 1 - width);
+  const minY = Math.min(0, 1 - height);
+  const maxY = Math.max(0, 1 - height);
+  return { x: clamp(rect.x, minX, maxX), y: clamp(rect.y, minY, maxY), width, height };
 }
 
 export function normalizedToPixels(rect: NormalizedRect, output: Size): Rect {
-  const safe = clampNormalizedRect(rect, 0);
+  const safe = clampNormalizedRect(rect, 0, 2);
   return { x: safe.x * output.width, y: safe.y * output.height, width: safe.width * output.width, height: safe.height * output.height };
 }
 
@@ -158,7 +162,7 @@ export class CanvasCompositor {
     this.config = {
       ...this.config, ...patch,
       fps: 30,
-      screen: patch.screen ? clampNormalizedRect(patch.screen, 0.2) : this.config.screen,
+      screen: patch.screen ? clampNormalizedRect(patch.screen, 0.2, 2) : this.config.screen,
       pip: patch.pip ? clampNormalizedRect(patch.pip) : this.config.pip,
       split: patch.split === undefined ? this.config.split : clamp(patch.split, 0.2, 0.8),
     };

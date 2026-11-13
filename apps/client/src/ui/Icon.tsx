@@ -18,6 +18,8 @@ const paths = {
   chevron: 'M9 6l6 6-6 6',
   sliders: 'M4 6h10 M18 6h2 M14 4v4 M4 12h4 M12 12h8 M8 10v4 M4 18h12 M20 18h0 M16 16v4',
   close: 'M6 6l12 12 M18 6l-12 12',
+  minus: 'M5 12h14',
+  plus: 'M12 5v14 M5 12h14',
   book: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H12v17H6.5A2.5 2.5 0 0 0 4 22.5z M20 5.5A2.5 2.5 0 0 0 17.5 3H12v17h5.5a2.5 2.5 0 0 1 2.5 2.5z',
 } as const;
 

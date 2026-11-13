@@ -100,9 +100,10 @@ export function CompositorPanel({
         return;
       }
       const minSize = active.target === 'screen' ? 0.2 : 0.12;
+      const maxSize = active.target === 'screen' ? 2 : 1;
       const next = active.mode === 'move'
-        ? clampNormalizedRect({ ...active.rect, x: active.rect.x + dx, y: active.rect.y + dy }, minSize)
-        : clampNormalizedRect({ ...active.rect, width: active.rect.width + dx, height: active.rect.height + dy }, minSize);
+        ? clampNormalizedRect({ ...active.rect, x: active.rect.x + dx, y: active.rect.y + dy }, minSize, maxSize)
+        : clampNormalizedRect({ ...active.rect, width: active.rect.width + dx, height: active.rect.height + dy }, minSize, maxSize);
       if (active.target === 'screen') setScreenRect(next);
       else setPip(next);
     };
@@ -123,7 +124,21 @@ export function CompositorPanel({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [sceneModalOpen]);
 
-  function changeScreen(next: NormalizedRect) { setScreenRect(clampNormalizedRect(next, 0.2)); }
+  function changeScreen(next: NormalizedRect) { setScreenRect(clampNormalizedRect(next, 0.2, 2)); }
+  function stepScreenScale(delta: number) {
+    setScreenRect(current => {
+      const centerX = current.x + current.width / 2;
+      const centerY = current.y + current.height / 2;
+      const width = Math.round(Math.min(2, Math.max(0.2, current.width + delta)) * 100) / 100;
+      const height = Math.round(Math.min(2, Math.max(0.2, current.height + delta)) * 100) / 100;
+      return clampNormalizedRect({
+        x: centerX - width / 2,
+        y: centerY - height / 2,
+        width,
+        height,
+      }, 0.2, 2);
+    });
+  }
   function beginPointer(target: 'pip' | 'screen', mode: 'move' | 'resize', event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
     const rect = target === 'screen' ? screenRect : pip;
@@ -138,8 +153,19 @@ export function CompositorPanel({
 
   const size = RESOLUTIONS[preset];
   const pipStyle = { left: `${pip.x * 100}%`, top: `${pip.y * 100}%`, width: `${pip.width * 100}%`, height: `${pip.height * 100}%` };
-  const screenStyle = { left: `${screenRect.x * 100}%`, top: `${screenRect.y * 100}%`, width: `${screenRect.width * 100}%`, height: `${screenRect.height * 100}%` };
-  const isScreenCustom = screenRect.x > 0.001 || screenRect.y > 0.001 || screenRect.width < 0.999 || screenRect.height < 0.999;
+  const visualScreenRect = {
+    x: Math.max(0, screenRect.x),
+    y: Math.max(0, screenRect.y),
+    width: Math.min(1, screenRect.width),
+    height: Math.min(1, screenRect.height),
+  };
+  const screenStyle = {
+    left: `${visualScreenRect.x * 100}%`,
+    top: `${visualScreenRect.y * 100}%`,
+    width: `${visualScreenRect.width * 100}%`,
+    height: `${visualScreenRect.height * 100}%`,
+  };
+  const isScreenCustom = Math.abs(screenRect.x) > 0.001 || Math.abs(screenRect.y) > 0.001 || Math.abs(screenRect.width - 1) > 0.001 || Math.abs(screenRect.height - 1) > 0.001;
 
   return (
     <section className="panel compositor-panel" aria-labelledby="compositor-title">
@@ -189,14 +215,33 @@ export function CompositorPanel({
         </button>
         {(layout === 'pip' || layout === 'screen') && screen && (
           <div className={isScreenCustom ? 'screen-editor screen-editor--custom' : 'screen-editor'} style={screenStyle}>
-            <div className="screen-editor__controls">
+            <div className="screen-editor__controls" role="group" aria-label="Screen view size controls">
+              <button
+                type="button"
+                aria-label="Decrease screen view"
+                className="screen-step-btn"
+                disabled={screenRect.width <= 0.2}
+                onClick={() => stepScreenScale(-0.1)}
+              >
+                <Icon name="minus" size={14} />
+              </button>
               <button
                 type="button"
                 aria-label="Move screen view"
                 className="screen-move"
                 onPointerDown={event => beginPointer('screen', 'move', event)}
               >
-                Move screen
+                <Icon name="screen" size={13} />
+                <span>{Math.round(screenRect.width * 100)}%</span>
+              </button>
+              <button
+                type="button"
+                aria-label="Increase screen view"
+                className="screen-step-btn"
+                disabled={screenRect.width >= 2}
+                onClick={() => stepScreenScale(0.1)}
+              >
+                <Icon name="plus" size={14} />
               </button>
               {isScreenCustom && (
                 <button
