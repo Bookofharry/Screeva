@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CanvasCompositor, clampNormalizedRect, containRect, coverCrop, normalizedToPixels, splitRegions, type CompositorRuntime } from '../apps/client/src/media/compositor.js';
+import { CanvasCompositor, clampNormalizedRect, containRect, coverCrop, coverCropWithin, normalizedToPixels, splitRegions, type CompositorRuntime } from '../apps/client/src/media/compositor.js';
 
 class Track {
   kind = 'video'; readyState: MediaStreamTrackState = 'live'; stops = 0;
@@ -59,6 +59,21 @@ test('cover crop centers the source without stretching', () => {
   assert.deepEqual(coverCrop({ width: -1, height: 10 }, { x: 0, y: 0, width: 2, height: 2 }), { x: 0, y: 0, width: 0, height: 0 });
 });
 
+test('camera crop stays inside normalized bounds while matching destination aspect', () => {
+  assert.deepEqual(
+    coverCropWithin(
+      { width: 640, height: 480 },
+      { x: 0, y: 0, width: 1280, height: 720 },
+      { x: 0, y: 0.2, width: 0.5, height: 0.5 },
+    ),
+    { x: 0, y: 126, width: 320, height: 180 },
+  );
+  assert.deepEqual(
+    coverCropWithin({ width: 0, height: 480 }, { x: 0, y: 0, width: 10, height: 10 }, { x: 0, y: 0, width: 1, height: 1 }),
+    { x: 0, y: 0, width: 0, height: 0 },
+  );
+});
+
 test('normalized PIP and split geometry clamp to the canvas', () => {
   assert.deepEqual(clampNormalizedRect({ x: 0.95, y: -1, width: 0.4, height: 2 }), { x: 0.6, y: 0, width: 0.4, height: 1 });
   assert.deepEqual(normalizedToPixels({ x: 0.25, y: 0.5, width: 0.5, height: 0.25 }, { width: 1280, height: 720 }), { x: 320, y: 360, width: 640, height: 180 });
@@ -80,6 +95,8 @@ test('engine renders screen contain plus camera PIP cover using exact geometry',
   assert.equal(f.canvas.context.clips > 0, true);
   assert.equal(f.canvas.context.imageSmoothingEnabled, true);
   assert.equal(f.canvas.context.imageSmoothingQuality, 'high');
+  f.compositor.setConfig({ cameraCrop: { x: 0, y: 0.2, width: 0.5, height: 0.5 } });
+  assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [0, 126, 320, 180, 640, 360, 320, 180]);
   assert.equal(screen.track.stops, 0); assert.equal(camera.track.stops, 0);
 });
 
@@ -92,6 +109,12 @@ test('screen view can be resized and positioned in normalized stage coordinates'
   assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [128, 72, 640, 360]);
   f.compositor.setConfig({ layout: 'screen', screen: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 } });
   assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [320, 180, 640, 360]);
+  f.compositor.setConfig({ screen: { x: 0, y: 0, width: 1, height: 1 }, screenCrop: { x: 0.5, y: 0, width: 0.5, height: 1 } });
+  assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [960, 270, 960, 540, 0, 0, 1280, 720]);
+  const config = f.compositor.getConfig();
+  assert.deepEqual(config.screenCrop, { x: 0.5, y: 0, width: 0.5, height: 1 });
+  config.screenCrop.x = 0;
+  assert.equal(f.compositor.getConfig().screenCrop.x, 0.5);
 });
 
 test('screen-only letterboxes and camera-only uses centered cover crop', t => {
@@ -104,6 +127,9 @@ test('screen-only letterboxes and camera-only uses centered cover crop', t => {
   assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [280, 0, 720, 720]);
   f.compositor.setConfig({ layout: 'camera' });
   assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [0, 0, 1920, 1080, 0, 0, 1280, 720]);
+  f.compositor.setConfig({ cameraCrop: { x: 0, y: 0.2, width: 0.5, height: 0.5 } });
+  assert.deepEqual(f.canvas.context.draws.at(-1)?.slice(1), [0, 216, 960, 540, 0, 0, 1280, 720]);
+  assert.deepEqual(f.compositor.getConfig().cameraCrop, { x: 0, y: 0.2, width: 0.5, height: 0.5 });
 });
 
 test('split respects proportions and resolution presets', t => {

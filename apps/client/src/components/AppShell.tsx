@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { Capabilities } from '../../../../packages/shared/src/index.js';
+import type { Capabilities, RecoveryInspection } from '../../../../packages/shared/src/index.js';
 import { checkWriteAccess, loadCapabilities } from '../api.js';
 import { Banner } from '../ui/Banner.js';
 import { Icon } from '../ui/Icon.js';
 import { StatusPill } from '../ui/StatusPill.js';
 import { recordingDocumentTitle } from '../ui/recording-ui.js';
+import { recoveryLaunchNotice, summarizeRecovery } from '../ui/recovery-ui.js';
 import {
   DEFAULT_STUDIO_VIEW,
   STUDIO_VIEWS,
@@ -34,7 +35,7 @@ export function AppShell() {
   const [activeView, setActiveView] = useState<StudioViewId>(() => parseViewFromHash(window.location.hash));
   const [captureSummary, setCaptureSummary] = useState(initialCaptureSummary);
   const [recordingStatus, setRecordingStatus] = useState(initialRecordingStatusSummary);
-  const [recoveryCount, setRecoveryCount] = useState(0);
+  const [recoveryItems, setRecoveryItems] = useState<RecoveryInspection[]>([]);
   const [recordingsRefresh, setRecordingsRefresh] = useState(0);
   const [recoveryRefresh, setRecoveryRefresh] = useState(0);
   const [settingsPortal, setSettingsPortal] = useState<HTMLElement | null>(null);
@@ -152,6 +153,8 @@ export function AppShell() {
   }, [recordingDuration, shellStatus.activityState]);
 
   const currentView = STUDIO_VIEWS.find(view => view.id === activeView) ?? DEFAULT_STUDIO_VIEW;
+  const recoverySummary = summarizeRecovery(recoveryItems);
+  const recoveryNotice = recoveryLaunchNotice(recoverySummary);
 
   return (
     <div className="shell app-shell">
@@ -200,7 +203,7 @@ export function AppShell() {
           {NAV_VIEWS.map((view, index) => {
             const isActive = activeView === view.id || (view.id === 'recordings' && activeView === 'recovery');
             const showStudioLiveDot = view.id === 'studio' && shellStatus.hasLiveSession && !isActive;
-            const showRecoveryBadge = view.id === 'recordings' && recoveryCount > 0;
+            const showRecoveryBadge = view.id === 'recordings' && recoverySummary.attentionCount > 0;
             return (
               <button
                 key={view.id}
@@ -224,9 +227,9 @@ export function AppShell() {
                 {showRecoveryBadge && (
                   <span
                     className="app-nav__badge"
-                    aria-label={`${recoveryCount} unfinished session${recoveryCount === 1 ? '' : 's'}`}
+                    aria-label={`${recoverySummary.attentionCount} interrupted session${recoverySummary.attentionCount === 1 ? '' : 's'} requiring attention`}
                   >
-                    {recoveryCount}
+                    {recoverySummary.attentionCount}
                   </span>
                 )}
               </button>
@@ -266,6 +269,23 @@ export function AppShell() {
             </Banner>
           </div>
         )}
+        {recoveryNotice && activeView !== 'recovery' && (
+          <div className="shell-alert">
+            <Banner
+              tone={recoveryNotice.tone}
+              announce
+              statusLabel="Interrupted recording notice"
+              title={recoveryNotice.title}
+              action={
+                <button type="button" className="secondary" onClick={() => selectView('recovery')}>
+                  Review Recovery
+                </button>
+              }
+            >
+              {recoveryNotice.detail}
+            </Banner>
+          </div>
+        )}
         <div
           id="view-studio"
           className="view-section"
@@ -292,7 +312,7 @@ export function AppShell() {
           {activeView === 'recordings' && (
             <RecordingsPanel
               refreshTrigger={recordingsRefresh}
-              recoveryCount={recoveryCount}
+              recoveryAttentionCount={recoverySummary.attentionCount}
               onOpenStudio={() => selectView('studio')}
               onOpenRecovery={() => selectView('recovery')}
             />
@@ -307,7 +327,7 @@ export function AppShell() {
         >
           <RecoveryPanel
             refreshTrigger={recoveryRefresh}
-            onItemsChange={items => setRecoveryCount(items.length)}
+            onItemsChange={setRecoveryItems}
             onSalvaged={() => setRecordingsRefresh(count => count + 1)}
           />
         </div>

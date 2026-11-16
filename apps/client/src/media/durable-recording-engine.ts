@@ -9,6 +9,7 @@ import {
   type FinalizedRecording,
   type RecordingConfiguration,
 } from '../../../../packages/shared/src/index.js';
+import { readJsonResponse } from '../api-response.js';
 import { RecordingChunkTransport, type BackpressureSignal, type ChunkTransportSnapshot } from './chunk-transport.js';
 import { RecordingEngine, initialRecordingSnapshot, type RecordingSnapshot, type RecordingStatus } from './recording-engine.js';
 
@@ -161,7 +162,7 @@ export class DurableRecordingEngine {
         method: 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'error',
         headers: { 'X-Recorder-Bootstrap': '1' },
       });
-      const bootstrapBody = await bootstrapResponse.json() as unknown;
+      const bootstrapBody = await readJsonResponse(bootstrapResponse, 'The local service did not authorize durable recording.');
       const bootstrap = responseSchema(bootstrapSchema).safeParse(bootstrapBody);
       if (!bootstrapResponse.ok || !bootstrap.success || !bootstrap.data.ok) throw new Error(messageFromErrorBody(bootstrapBody, 'The local service did not authorize durable recording.'));
       if (!this.isCurrent(generation)) return false;
@@ -171,7 +172,7 @@ export class DurableRecordingEngine {
         headers: { 'Content-Type': 'application/json', 'X-Recorder-Token': this.writeToken },
         body: JSON.stringify(input.data),
       });
-      const sessionBody = await sessionResponse.json() as unknown;
+      const sessionBody = await readJsonResponse(sessionResponse, 'The durable recording session could not be created.');
       const session = responseSchema(recordingSessionSchema).safeParse(sessionBody);
       if (!sessionResponse.ok || !session.success || !session.data.ok) throw new Error(messageFromErrorBody(sessionBody, 'The durable recording session could not be created.'));
       if (!this.isCurrent(generation)) return false;
@@ -275,9 +276,7 @@ export class DurableRecordingEngine {
         await this.delay(250 * (2 ** (attempt - 1)), generation);
         continue;
       }
-      let body: unknown;
-      try { body = await response.json() as unknown; }
-      catch { throw new Error('The local service returned an invalid finalization response.'); }
+      const body = await readJsonResponse(response, 'The local service returned an invalid finalization response.');
       if (!response.ok) {
         const transient = response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500;
         if (transient && attempt < 3) { await this.delay(250 * (2 ** (attempt - 1)), generation); continue; }
@@ -375,7 +374,7 @@ export class DurableRecordingEngine {
         method: 'POST', cache: 'no-store', credentials: 'same-origin', redirect: 'error', referrerPolicy: 'no-referrer',
         headers: { 'Content-Type': 'application/json', 'X-Recorder-Token': this.writeToken }, body: '{}', signal: controller.signal,
       });
-      const body = await response.json() as unknown;
+      const body = await readJsonResponse(response, 'The local service returned an invalid activity response.');
       const busy = errorEnvelopeSchema.safeParse(body);
       if (allowBusy && response.status === 409 && busy.success && busy.data.error.code === 'CONFLICT') return;
       const parsed = responseSchema(recoveryHeartbeatSchema).safeParse(body);

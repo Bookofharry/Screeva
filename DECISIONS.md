@@ -202,6 +202,136 @@
 
 **Consequences:** Upload, heartbeat, finalization and recovery now have an unambiguous exclusion order, and late activity cannot make an interrupted session appear active after recovery has begun. Busy heartbeat requests may return 409 and the durable controller will fail visibly rather than conceal uncertain server state. The deterministic suite verifies durability and ownership invariants but does not prove sudden-power-loss, real disk-full or physical-device behavior. The separate trusted real-media acceptance passed on 2026-11-13, completing the Phase 3 gate while leaving those external validations explicit.
 
+## ADR-027 — Engine-derived recording UX with connected-default durable mode
+**Status:** Accepted.
+
+**Date:** 2026-11-13.
+
+**Context:** The recording engines already exposed truthful lifecycle snapshots, but the dock defaulted to volatile temporary mode and did not protect active work from tab closure or distinguish upload/finalization progress. UX improvements must not duplicate media state in React, claim completion early, or acquire ownership of borrowed tracks.
+
+**Decision:** Keep recording state authoritative in RecordingEngine and DurableRecordingEngine. Derive dock actions, unload risk, progress and document title through pure UI helpers. Pass only a read-only durable-availability flag through the permanently mounted Studio tree; select durable by default when connected unless the user has explicitly chosen a mode. Keep the three-second countdown optional and disabled by default, with explicit skip/cancel; it starts no session or encoder until completion. Register `beforeunload` only for recording, paused, stopping, uploading, retrying and finalizing. Render determinate upload progress only from acknowledged and queued chunk counts, and render Saved only from non-null validated final output.
+
+**Alternatives:** Keep temporary mode as the default; infer state from button clicks; start encoding behind the countdown immediately; show synthetic percentages for FFprobe finalization; persist the mode or credential in browser storage; let React stop media tracks during unload.
+
+**Consequences:** Beginners with a connected local service receive crash-safer durable recording by default, while temporary preview remains an explicit offline-compatible option. UI timers and listeners clean up independently of media engines, false completion remains impossible, and queue/memory/security boundaries are unchanged. Browser-native unload dialogs control their own wording. The optional countdown is session-local and resets on reload; keyboard shortcuts remain UX-5 scope.
+
+## ADR-028 — Authoritative recovery attention with bounded lease follow-up
+**Status:** Accepted.
+
+**Date:** 2026-11-14.
+
+**Context:** UX-4 must identify interrupted durable sessions at launch and after current-tab failures without calling an active upload interrupted, bypassing the server lease, promising recovery of browser-only data, or inventing Phase 5 library actions. An immediate inspection after a finalization failure can still report `active` until the existing ten-second heartbeat lease expires.
+
+**Decision:** Derive all recovery attention from authenticated, schema-validated server inspections through a pure presentation helper. Exclude `active` from badges and interruption notices; label every condition and display exact verified/contiguous/committed evidence. On initial launch or a durable completion/failure refresh trigger, allow `RecoveryPanel` to follow an active result once per second for at most twelve seconds, suppress stale generations, then stop. Keep salvage explicit and route it through the existing recovery/finalization service. Keep the session library read-only and visibly defer playback, download, MP4 export and deletion until corresponding APIs exist.
+
+**Alternatives:** Treat every unfinished session as recoverable; clear or ignore the activity lease in the UI; refresh only once and require a manual reload after failure; auto-salvage on launch; infer recovery from the session-list status alone; render disabled or nonfunctional Phase 5 actions.
+
+**Consequences:** Launch and post-failure attention reflects authoritative server evidence without racing active work. A failed recording can become visible after its lease naturally expires, while corrupt, empty, unavailable and browser-only evidence is never advertised as restorable. The bounded timer and request are cleaned on unmount, and no media ownership, token persistence, queue limits, storage schema or security middleware changes are introduced.
+
+## ADR-029 — State-derived single-key shortcuts and contained modal focus
+**Status:** Accepted.
+
+**Date:** 2026-11-14.
+
+**Context:** UX-5 adds convenient single-character recording controls, but WCAG 2.2 SC 2.1.4 requires a way to disable them and they must not fire while a user types, adjusts a slider, operates a modal or drags the composition. React rerenders must not leave duplicate/stale listeners. The existing custom dialogs also need predictable keyboard entry, containment and focus restoration.
+
+**Decision:** Keep shortcut resolution in a pure UI helper and derive action availability from the existing recorder dock state. Install one lifetime listener in RecordingPanel backed by current refs. Ignore repeats, Ctrl/Alt/Meta, editable/form targets, sliders, open dialogs and a transient compositor-drag marker. Provide a visible, session-memory off switch in Recording options; do not persist it or introduce global settings storage. Route accepted keys through the same start/stop/pause/resume/countdown functions used by buttons. Share a small `useModalFocus` hook between Recording and Scene dialogs to move focus in, wrap Tab/Shift+Tab and restore the exact opener.
+
+**Alternatives:** Bind listeners after every render; synthesize button clicks; let shortcuts run inside inputs/sliders; enable shortcuts without an off switch; persist preferences or credentials together; replace the current modal DOM with a new dependency during UX-5; claim automation as screen-reader/usability acceptance.
+
+**Consequences:** Shortcut behavior cannot create an alternate recording state or acquire/stop tracks, and immediate post-dialog keys observe current state. Focus no longer remains in hidden dialogs. The off switch resets on reload by design and may become a persisted non-sensitive preference in a future settings milestone. Automated Chromium evidence covers logic, focus and layout, while Narrator/NVDA, physical-device, Edge and five-person acceptance remain explicitly open.
+
+## ADR-030 — Self-host a pinned pre-telemetry MediaPipe face detector
+**Status:** Accepted.
+
+**Date:** 2026-11-15.
+
+**Context:** Face analysis must remain local, work in ordinary Chromium, and never take ownership of `CaptureManager` streams. Native `FaceDetector` availability is platform-dependent. The current MediaPipe Tasks Vision 1.2.x privacy notice describes performance and utilization metrics sent to Google, which conflicts with Screeva's no-telemetry default. A reviewed older release and model still add supply-chain, redistribution, CSP and build-reproducibility obligations.
+
+**Decision:** Retain the React-independent `FaceDetectorBackend` boundary and make exact `@mediapipe/tasks-vision` 0.10.21 the default ordinary-browser backend, with native Shape Detection as a defensive fallback. Load it dynamically only after explicit user enablement. Self-host its four WASM assets and the official BlazeFace short-range model under `/vision`; verify the model's 229,746-byte length and SHA-256 `b4578f35940bf5a1a655214a1cce5cab13eba73c1297cd78e1a04c2380b0152f` during install/build before publishing it. Allow `SCREEVA_FACE_MODEL_PATH` for an offline first build. Permit CSP `'wasm-unsafe-eval'` but not general `'unsafe-eval'`, retain `connect-src 'self'`, and make no runtime CDN or inference request. Keep detection off by default. Detector results remain observations until the separate crop/smoothing task consumes them.
+
+**Alternatives:** Use current MediaPipe 1.2.x despite its documented metrics; rely only on the platform-dependent native API; fetch runtime/model assets from a CDN; add the legacy Face Detection package without exact asset verification; couple detector calls directly to React or the compositor.
+
+**Consequences:** Ordinary Chromium has a reproducible local detector and normal inference has no external network dependency. The Apache-2.0 package and model require retained notices during distribution; the dependency adds about 20.5 MB unpacked plus a 229 KB model, while application JavaScript stays lazy-loaded. A first asset preparation needs either access to the hash-pinned official model URL or `SCREEVA_FACE_MODEL_PATH`. Exact pinning defers upstream security/features and therefore requires deliberate review before upgrades. Detection alone never changes recorded pixels; ADR-031 subsequently adds the separate stable crop/hold/recenter controller, while manual framing remains separate.
+
+## ADR-031 — Normalized, time-based auto framing remains independent of detection and rendering
+**Status:** Accepted.
+
+**Date:** 2026-11-16.
+
+**Context:** Face observations arrive at an adaptive 2–12 Hz, while the canvas renders at 30 fps and browser animation timing varies under load. Directly applying each detection would produce visible jitter and jumps, and putting tracking state in React or the detector would couple observation, presentation and stream ownership. Temporary missed detections must not immediately snap the presenter to full frame.
+
+**Decision:** Introduce a standalone `AutoFrameController` that consumes normalized face boxes, selects the largest valid face as the primary presenter, and emits a normalized square source region. Target approximately 38% face occupancy with a 38% minimum crop. Apply 4.5% movement and 5% zoom dead zones, time-based exponential response (260 ms while tracking, 650 ms while recentering), a 1.5-second lost-face hold, then ease to the full frame. Own at most one animation callback and reset synchronously on disable, source replacement or disposal. Keep destination-aspect fitting in `CanvasCompositor.coverCropWithin`; React only wires snapshots and exposes status. Keep analysis/auto framing explicitly off until the user enables it.
+
+**Alternatives:** Jump directly to every detection; smooth in React state or inside MediaPipe; use frame-count-dependent interpolation; immediately recenter on one missed sample; mutate camera track constraints; render a separate preview path; choose an arbitrary first detection without a primary-face policy.
+
+**Consequences:** Detection cadence and render cadence are decoupled, camera-only/PIP/split layouts share bounded source geometry, and preview pixels are the same pixels exposed to recording. Brief misses are stable and sustained loss returns safely to full frame. Repeated faces of similar size may still change primary selection without identity tracking, and physical-camera tuning under motion remains an external acceptance item. ADR-032 subsequently adds independent manual framing and mode override; no track ownership or dependency changes were introduced.
+
+## ADR-032 — Manual framing is independent session state and overrides analysis
+**Status:** Accepted.
+
+**Date:** 2026-11-16.
+
+**Context:** CAM-01 requires user-controlled camera position and digital zoom, while CAM-02 requires an explicit auto-framing off switch. A manual adjustment must override tracking without losing the user's chosen frame, requesting media again, mutating track constraints or implying unsupported optical camera control. Automatic crops are transient and should not overwrite a deliberate manual composition.
+
+**Decision:** Represent manual framing as normalized `{zoom, panX, panY}` session state in a pure `camera-framing.ts` module. Bound digital zoom to 1.0×–2.6× and each pan axis to `[0,1]`, producing a square contained source crop for the existing compositor. Default to Manual/full frame with no analysis. Keep manual and automatic crops independent: selecting Automatic starts the local detector/framer and renders its crop; selecting Manual stops analysis and immediately restores the saved manual crop. Any manual adjustment selects Manual, and Reset restores `{zoom:1, panX:0.5, panY:0.5}`. Keep final destination-aspect fitting in the compositor and controls disabled without a camera.
+
+**Alternatives:** Apply `MediaStreamTrack.applyConstraints()` zoom/pan; claim optical zoom/focus; copy the current automatic crop into manual state; discard manual state whenever auto mode starts; keep detecting while Manual is selected; store camera framing persistently or per-device in this task; implement separate renderer paths per mode.
+
+**Consequences:** Manual composition is deterministic, bounded, private by default and survives temporary mode changes or camera replacement within the mounted Studio session. Preview and recording use identical pixels, while CaptureManager ownership and permission behavior are unchanged. The chosen 2.6× ceiling limits severe quality loss but remains digital cropping; no hardware PTZ capability is promised. Settings are not persisted across reload, and physical-device image-quality acceptance remains external.
+
+## ADR-033 — Screen focus is a source crop selected only from the borrowed local preview
+**Status:** Accepted.
+
+**Date:** 2026-11-16.
+
+**Context:** FOC-01 needs a user-selected screen region, while the compositor already has a normalized screen rectangle that means destination placement on the stage. Reusing that rectangle would conflate moving/resizing the scene with choosing source pixels. A crop chosen for one shared tab/window/monitor is unsafe to retain after display-source replacement, and an ordinary webpage cannot provide system-wide pointer tracking.
+
+**Decision:** Add a distinct normalized `screenCrop` to `CanvasCompositor` and keep selection math in pure `screen-focus.ts`. Preserve contain/letterbox rendering for the full source; cover-fit a custom source crop to the current screen destination so pixels are not stretched. Perform selection against a temporary full-source `<video>` that borrows the existing CaptureManager stream, accepts pointer input only within the local stage overlay, preserves destination aspect and commits atomically on a valid drag. Cancel leaves the active crop unchanged; Reset restores full frame. Detach selector resources without stopping tracks and reset/close whenever display-stream identity changes. Apply the crop immediately in this task; defer saved presets and smoothed transitions to Phase 4 Task 5.
+
+**Alternatives:** Reuse the destination `screen` rectangle; crop the selector's already-focused canvas output; request display capture again; apply track constraints; retain a crop across unrelated display sources; claim global mouse tracking; implement presets and animation in the selection task.
+
+**Consequences:** Screen placement and source focus remain independently testable normalized contracts, and preview/recording consume identical composed pixels. Selection needs no new permission, dependency, storage or track ownership. Source replacement safely loses the session crop by design. At this Task 4 decision boundary the immediate crop change could be visually abrupt; ADR-034 subsequently adds the named presets and safe transitions. Physical multi-monitor/DPI/touch ergonomics remain external acceptance work.
+
+## ADR-034 — Focus presets are volatile normalized targets behind one cancellable transition controller
+**Status:** Accepted.
+
+**Date:** 2026-11-16.
+
+**Context:** FOC-01 requires smooth focus changes and FOC-02 names Code, Terminal, Browser and Full frame presets. Animation inside React or the compositor would mix lifecycle/state ownership with rendering, while persistent presets would require a settings schema and rules for potentially sensitive shared-screen geometry. Rapid preset/reset actions and reduced-motion preference must not create overlapping loops or unsafe intermediate crops.
+
+**Decision:** Keep a standalone `ScreenFocusTransitionController` as the sole owner of current/target crop animation. Use a 420 ms time-based cubic ease-in/out, normalized interpolation, exact endpoints and one cancellable animation callback. Retarget from the currently rendered crop; ignore duplicate in-flight targets; reset immediately on display-source replacement; and finish immediately whenever reduced motion is requested. Store Code, Terminal and Browser slots only in mounted Studio session memory, with Full frame as a built-in target. Clone/normalize saved rectangles, apply every target through the controller and clear named slots on display-stream identity change. Allow normalized slots to remap automatically through layout and output-resolution changes.
+
+**Alternatives:** Animate in CSS, React effects or `CanvasCompositor`; jump between crops; start one loop per action; use frame-count-dependent timing; ignore reduced motion; persist presets in localStorage/SQLite; retain presets across unrelated shared sources; store source pixels instead of normalized geometry.
+
+**Consequences:** Selection, presets and reset share one deterministic transition path and recorded pixels match the preview throughout. Rapid actions remain bounded and cleanup cannot leave a late animation. No permission, track, API, storage schema or dependency changes are introduced. Presets intentionally disappear on reload or source replacement; persistent user presets would need a later explicit privacy/settings decision. Deterministic and synthetic-browser checks do not establish physical multi-monitor, touch, Edge or sustained-load smoothness.
+
+## ADR-035 — Durable recording availability requires a validated JSON capability response
+**Status:** Accepted.
+
+**Date:** 2026-11-16.
+
+**Context:** A static-preview convenience path returned fabricated recording and write capabilities on every non-loopback hostname. The UI therefore offered durable recording without a verified local API. Starting requested the relative bootstrap path from the static frontend; an HTML SPA fallback began with `<!DOCTYPE` and leaked a raw JSON parser error. A 200 response or same-origin URL alone is not evidence that the loopback recording service exists.
+
+**Decision:** Remove fabricated capability, session-list and write-check success. Derive connected/durable availability only from a schema-valid v1 JSON capability response. Decode service bodies through a shared guarded reader for initial capabilities and durable bootstrap/session/heartbeat/finalization boundaries. Treat HTML, empty or malformed bodies as service failures with loopback and Quick browser test guidance. Fail before creating a session or recorder and retain temporary browser recording as the offline fallback.
+
+**Alternatives:** Keep demo capabilities but disable only Start; detect `<!DOCTYPE` strings at one call site; trust HTTP 200 or `Content-Type` without schema validation; proxy automatically to a guessed localhost port; permit durable mode to continue after an unverified bootstrap response.
+
+**Consequences:** Static deployments and misconfigured proxies no longer claim durable persistence, and raw parser exceptions are not shown to users. A working same-origin loopback server remains unchanged and continues to pass authenticated end-to-end recording. Hosted previews visibly report the local service unavailable and offer temporary recording; connecting a separately hosted frontend to localhost would require a future explicit, security-reviewed origin/transport design rather than a fabricated capability.
+
+## ADR-036 — Baseline MP4 export is a single internal worker over an immutable finalized source
+**Status:** Accepted.
+
+**Date:** 2026-11-16.
+
+**Context:** Phase 5 needs FFmpeg export without weakening the durability boundary established by chunk finalization. FFmpeg is an external process, output can be large or malformed, user-controlled command construction would create injection risk, and concurrent encodes could exhaust a local machine. Task 1 does not yet include authenticated routes, progress, cancellation, retry, cleanup policy or library actions, so advertising public export would be a false capability.
+
+**Decision:** Add a dedicated process adapter using `spawn` with `shell: false`, a fixed H.264/AAC argument vector, at most four encoding threads, an FFmpeg output-byte ceiling, bounded stderr and a three-hour ceiling. Accept only the literal `ffmpeg` from `PATH` or an absolute configured executable. Add a FIFO `ExportService` with one active conversion and at most 1,000 retained in-memory job records. Resolve sources and destinations exclusively from a validated session UUID; require a completed session; validate the finalized WebM length and SHA-256 before and after conversion; reject links and non-regular files; bound the output relative to source size; flush a randomized temporary MP4; and atomically rename it. Drain accepted jobs on orderly server shutdown. Keep the API capability false until authenticated orchestration exists.
+
+**Alternatives:** Run FFmpeg directly in an Express route; interpolate a shell command; allow caller-supplied paths/codecs; export concurrently; overwrite or delete the WebM after success; store export jobs in SQLite before Task 2 defines retry/cancellation semantics; expose a route with no progress or recovery contract; treat an existing MP4 as an idempotent success without durable export metadata.
+
+**Consequences:** The first export baseline is resource-bounded, injection-resistant and preserves recording evidence on both success and failure. Real FFmpeg/FFprobe acceptance establishes H.264/AAC playability, but jobs and success metadata do not survive restart and no user can invoke or observe them through the application yet. Task 2 must define authenticated API/UI lifecycle, progress, cancellation, retry and stale-temporary/output reconciliation before `export` becomes a public capability. Task 3 must define quality presets and codec probing. POSIX directory publication is fsynced; Windows relies on file flush plus atomic rename because Node returns `EPERM` for directory fsync, so sudden-power-loss durability remains unclaimed. FFmpeg/FFprobe remain separately installed GPL tools rather than npm dependencies, leaving the repository's MIT source license and dependency graph unchanged.
+
 ## Template for a new decision
 ```md
 ## ADR-XXX — Title

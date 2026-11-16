@@ -8,7 +8,7 @@ import { formatClockDuration } from '../ui/shell-status.js';
 
 export interface RecordingsPanelProps {
   refreshTrigger?: number | undefined;
-  recoveryCount?: number | undefined;
+  recoveryAttentionCount?: number | undefined;
   onOpenStudio?: (() => void) | undefined;
   onOpenRecovery?: (() => void) | undefined;
 }
@@ -57,7 +57,7 @@ function statusTone(status: SessionStatus): StatusTone {
   }
 }
 
-export function RecordingsPanel({ refreshTrigger = 0, recoveryCount = 0, onOpenStudio, onOpenRecovery }: RecordingsPanelProps) {
+export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0, onOpenStudio, onOpenRecovery }: RecordingsPanelProps) {
   const mounted = useRef(false);
   const [items, setItems] = useState<RecordingSession[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -121,13 +121,13 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryCount = 0, onOpenS
       <div className="panel-heading recordings-header">
         <div className="recordings-header__intro">
           <div className="compositor-header__title">
-            <h2 id="recordings-title">Your saved videos</h2>
-            <span className={items.length > 0 ? 'badge capture-active' : 'badge'} role="status" aria-label="Saved videos count">
-              {loading ? 'Loading…' : `${items.length} saved`}
+            <h2 id="recordings-title">Your local sessions</h2>
+            <span className={items.length > 0 ? 'badge capture-active' : 'badge'} role="status" aria-label="Local sessions count">
+              {loading ? 'Loading…' : `${items.length} session${items.length === 1 ? '' : 's'}`}
             </span>
           </div>
           <p className="setup-help">
-            Every video you finish recording with <strong>Save to computer</strong> in Studio is stored on this device and listed here.
+            Durable sessions stored by the local service are listed here, including unfinished attempts and independently verified WebM output metadata.
           </p>
         </div>
         <div className="compositor-header__actions">
@@ -141,21 +141,24 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryCount = 0, onOpenS
           )}
         </div>
       </div>
-      {recoveryCount > 0 && onOpenRecovery && (
+      {recoveryAttentionCount > 0 && onOpenRecovery && (
         <div className="recovery-inline-callout" role="status">
           <div className="recovery-inline-callout__body">
             <strong>
-              {recoveryCount} unfinished video{recoveryCount === 1 ? '' : 's'} can be restored
+              {recoveryAttentionCount} interrupted session{recoveryAttentionCount === 1 ? '' : 's'} need review
             </strong>
             <p>
-              A recording stopped before finishing, but its auto-saved pieces are still on your computer.
+              Recovery will distinguish verified salvageable chunks from empty, corrupt, unavailable, or still-active sessions.
             </p>
           </div>
           <button type="button" className="button-compact" onClick={onOpenRecovery}>
-            Restore in Recovery
+            Review Recovery
           </button>
         </div>
       )}
+      <p className="recordings-scope-note">
+        This library is read-only in the current milestone. Playback, file download, MP4 export, and deletion controls are not implemented yet.
+      </p>
       {loading && <p className="setup-help" role="status">Loading local sessions…</p>}
       {error && (
         <div className="recordings-error" role="alert">
@@ -170,9 +173,9 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryCount = 0, onOpenS
           <span className="empty-state__icon" aria-hidden="true">
             <Icon name="library" size={22} />
           </span>
-          <h3>No saved videos yet</h3>
+          <h3>No local sessions yet</h3>
           <p className="setup-help">
-            Screeva starts in <strong>Quick browser test</strong> mode so you can preview takes without writing files to disk. Follow these steps in <strong>Studio</strong> to save videos here permanently:
+            When the local service is connected, Screeva defaults to <strong>Save to computer</strong>. Follow these steps in <strong>Studio</strong> to create a durable local session:
           </p>
           <ol className="how-it-works-grid" aria-label="How to save a video to your computer">
             <li>
@@ -192,12 +195,12 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryCount = 0, onOpenS
                 <span className="how-it-works-grid__step">2</span>
                 <span className="how-it-works-grid__location">Recorder bar</span>
               </div>
-              <strong>Switch to &ldquo;Save to computer&rdquo;</strong>
+              <strong>Confirm &ldquo;Save to computer&rdquo;</strong>
               <span className="how-it-works-grid__chip">
                 <Icon name="sliders" size={13} />
-                <span>Quick browser test → Save to computer</span>
+                <span>Save to computer · Durable local session</span>
               </span>
-              <span>Click the <strong>Quick browser test</strong> button next to <strong>Start recording</strong> to open Recording options, pick <strong>Save to computer</strong>, and name your video.</span>
+              <span>Open Recording options to confirm <strong>Save to computer</strong> and name your video. Quick browser test remains an explicit temporary alternative.</span>
             </li>
             <li>
               <div className="how-it-works-grid__top">
@@ -263,11 +266,11 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryCount = 0, onOpenS
                 (item.status === 'interrupted' || item.status === 'recoverable' || (item.status !== 'completed' && item.chunks.committedCount > 0)) && (
                   <div className="session-card__actions">
                     <span className="setup-help">
-                      Stopped early — {formatBytes(item.chunks.committedBytes)} auto-saved ({item.chunks.committedCount} piece{item.chunks.committedCount === 1 ? '' : 's'}).
+                      Unfinished — the server acknowledged {formatBytes(item.chunks.committedBytes)} in {item.chunks.committedCount} chunk{item.chunks.committedCount === 1 ? '' : 's'}.
                     </span>
                     {onOpenRecovery && (
                       <button className="secondary button-compact" aria-label="Inspect in Recovery" onClick={onOpenRecovery}>
-                        Restore video
+                        Inspect recovery evidence
                       </button>
                     )}
                   </div>

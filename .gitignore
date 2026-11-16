@@ -5,6 +5,7 @@ coverage/
 playwright-report/
 test-results/
 .local/
+apps/client/public/vision/
 .env
 .env.*
 *.log

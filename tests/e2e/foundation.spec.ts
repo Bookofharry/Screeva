@@ -42,6 +42,21 @@ test('foundation status and authenticated check work without external requests o
   expect(errors).toEqual([]);
 });
 
+test('HTML API fallback is reported offline without exposing a JSON parser error or enabling durable mode', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/v1/capabilities', route => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: '<!DOCTYPE html><title>Static frontend fallback</title>',
+  }));
+  await page.goto('/');
+  await expect(page.getByRole('status', { name: 'Local service status' })).toContainText('Unavailable');
+  await expect(page.getByRole('alert').filter({ hasText: 'Cannot reach the local service. Check that the server is running, then retry.' }).first()).toBeVisible();
+  await expect(page.locator('.recording-panel')).toContainText('Quick browser test');
+  expect(errors.some(message => message.includes("Unexpected token '<'"))).toBe(false);
+});
+
 test('same-origin browser can create, list and retrieve persistent session metadata', async ({ page }) => {
   await page.goto('/');
   const result = await page.evaluate(async () => {
@@ -245,5 +260,12 @@ test('AppShell supports keyboard navigation, browser history, reload, and respon
     expect(metrics.topAfterScroll).toBe(0);
     expect(metrics.noOverflow, `viewport ${viewport.width}x${viewport.height} should not overflow horizontally`).toBe(true);
     expect(metrics.minNavHeight, `viewport ${viewport.width}x${viewport.height} nav buttons should be >= 44px`).toBeGreaterThanOrEqual(44);
+
+    for (const view of ['studio', 'recordings', 'guides', 'settings', 'recovery']) {
+      await page.evaluate(nextView => { window.location.hash = `#${nextView}`; }, view);
+      await expect(page.locator(`#view-${view}`)).toBeVisible();
+      const noViewOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+      expect(noViewOverflow, `${view} at ${viewport.width}x${viewport.height} should not overflow horizontally`).toBe(true);
+    }
   }
 });

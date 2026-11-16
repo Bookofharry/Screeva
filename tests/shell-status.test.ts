@@ -248,9 +248,13 @@ test('derives temporary recorder and failure states and renders truthful Setting
   assert.match(settingsMarkup, /Local-only security &amp; storage boundaries/);
 
   const recordingsMarkup = renderToStaticMarkup(createElement(RecordingsPanel, {}));
-  assert.match(recordingsMarkup, /Your saved videos/);
-  assert.match(recordingsMarkup, /Save to computer/);
+  assert.match(recordingsMarkup, /Your local sessions/);
+  assert.match(recordingsMarkup, /Durable sessions stored by the local service/);
   assert.match(recordingsMarkup, /Loading local sessions…/);
+  assert.match(recordingsMarkup, /library is read-only/i);
+  assert.match(recordingsMarkup, /Playback, file download, MP4 export, and deletion controls are not implemented yet/);
+  assert.doesNotMatch(recordingsMarkup, />Delete</);
+  assert.doesNotMatch(recordingsMarkup, />Export MP4</);
 
   const guidesMarkup = renderToStaticMarkup(createElement(GuidesPanel, {}));
   assert.match(guidesMarkup, /How Screeva works/);

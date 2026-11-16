@@ -9,7 +9,9 @@ export interface CompositionConfig {
   preset: ResolutionPreset;
   fps: 30;
   screen: NormalizedRect;
+  screenCrop: NormalizedRect;
   pip: NormalizedRect;
+  cameraCrop: NormalizedRect;
   split: number;
 }
 export interface CompositionSources { screen: MediaStream | null; camera: MediaStream | null }
@@ -22,7 +24,10 @@ export const DEFAULT_SCREEN_RECT: NormalizedRect = { x: 0, y: 0, width: 1, heigh
 export const DEFAULT_COMPOSITION: CompositionConfig = {
   layout: 'pip', preset: '720p', fps: 30,
   screen: { ...DEFAULT_SCREEN_RECT },
-  pip: { x: 0.68, y: 0.64, width: 0.28, height: 0.28 }, split: 0.65,
+  screenCrop: { x: 0, y: 0, width: 1, height: 1 },
+  pip: { x: 0.68, y: 0.64, width: 0.28, height: 0.28 },
+  cameraCrop: { x: 0, y: 0, width: 1, height: 1 },
+  split: 0.65,
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
@@ -60,6 +65,27 @@ export function coverCrop(source: Size, destination: Rect): Rect {
   }
   const height = source.width / destinationAspect;
   return { x: 0, y: (source.height - height) / 2, width: source.width, height };
+}
+
+export function coverCropWithin(source: Size, destination: Rect, normalizedBounds: NormalizedRect): Rect {
+  if (source.width <= 0 || source.height <= 0 || destination.width <= 0 || destination.height <= 0) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+  const bounds = clampNormalizedRect(normalizedBounds, 0.01, 1);
+  const region = {
+    x: bounds.x * source.width,
+    y: bounds.y * source.height,
+    width: bounds.width * source.width,
+    height: bounds.height * source.height,
+  };
+  const regionAspect = region.width / region.height;
+  const destinationAspect = destination.width / destination.height;
+  if (regionAspect > destinationAspect) {
+    const width = region.height * destinationAspect;
+    return { x: region.x + (region.width - width) / 2, y: region.y, width, height: region.height };
+  }
+  const height = region.width / destinationAspect;
+  return { x: region.x, y: region.y + (region.height - height) / 2, width: region.width, height };
 }
 
 export function splitRegions(output: Size, proportion: number): { screen: Rect; camera: Rect } {
@@ -153,7 +179,9 @@ export class CanvasCompositor {
     return {
       ...this.config,
       screen: { ...this.config.screen },
+      screenCrop: { ...this.config.screenCrop },
       pip: { ...this.config.pip },
+      cameraCrop: { ...this.config.cameraCrop },
     };
   }
 
@@ -163,7 +191,9 @@ export class CanvasCompositor {
       ...this.config, ...patch,
       fps: 30,
       screen: patch.screen ? clampNormalizedRect(patch.screen, 0.2, 2) : this.config.screen,
+      screenCrop: patch.screenCrop ? clampNormalizedRect(patch.screenCrop, 0.01, 1) : this.config.screenCrop,
       pip: patch.pip ? clampNormalizedRect(patch.pip) : this.config.pip,
+      cameraCrop: patch.cameraCrop ? clampNormalizedRect(patch.cameraCrop, 0.01, 1) : this.config.cameraCrop,
       split: patch.split === undefined ? this.config.split : clamp(patch.split, 0.2, 0.8),
     };
     this.applyResolution();
@@ -255,13 +285,36 @@ export class CanvasCompositor {
 
   private drawScreen(destination: Rect): void {
     const video = this.videos.screen;
-    const fitted = containRect({ width: video.videoWidth, height: video.videoHeight }, destination);
-    this.context.drawImage(video as CanvasImageSource, fitted.x, fitted.y, fitted.width, fitted.height);
+    const source = { width: video.videoWidth, height: video.videoHeight };
+    const crop = this.config.screenCrop;
+    const fullFrame = Math.abs(crop.x) < 0.001 && Math.abs(crop.y) < 0.001
+      && Math.abs(crop.width - 1) < 0.001 && Math.abs(crop.height - 1) < 0.001;
+    if (fullFrame) {
+      const fitted = containRect(source, destination);
+      this.context.drawImage(video as CanvasImageSource, fitted.x, fitted.y, fitted.width, fitted.height);
+      return;
+    }
+    const sourceCrop = coverCropWithin(source, destination, crop);
+    this.context.drawImage(
+      video as CanvasImageSource,
+      sourceCrop.x,
+      sourceCrop.y,
+      sourceCrop.width,
+      sourceCrop.height,
+      destination.x,
+      destination.y,
+      destination.width,
+      destination.height,
+    );
   }
 
   private drawCamera(destination: Rect, rounded = false): void {
     const video = this.videos.camera;
-    const crop = coverCrop({ width: video.videoWidth, height: video.videoHeight }, destination);
+    const crop = coverCropWithin(
+      { width: video.videoWidth, height: video.videoHeight },
+      destination,
+      this.config.cameraCrop,
+    );
     this.context.save();
     if (rounded) {
       this.context.beginPath();

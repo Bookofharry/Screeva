@@ -6,13 +6,16 @@ import { SessionOperationLock } from './services/session-operation-lock.js';
 import { SessionActivityRegistry } from './services/session-activity.js';
 import { createRecoveryService } from './services/recovery.js';
 import { createFFprobeAdapter, type FFprobeAdapter } from './media/ffprobe.js';
+import { createFFmpegAdapter, type FFmpegAdapter } from './media/ffmpeg.js';
 import { openMetadata } from './storage/database.js';
+import { createExportService } from './services/exports.js';
 
 export interface ServerOptions {
   port: number;
   dataDirectory: string;
   clientDirectory?: string;
   ffprobe?: FFprobeAdapter;
+  ffmpeg?: FFmpegAdapter;
 }
 
 export async function startServer(options: ServerOptions) {
@@ -23,6 +26,7 @@ export async function startServer(options: ServerOptions) {
   const chunks = createChunkIngestionService(store, options.dataDirectory, {}, locks);
   const finalization = createFinalizationService(store, options.dataDirectory, options.ffprobe ?? createFFprobeAdapter(), {}, locks);
   const recovery = createRecoveryService(store, options.dataDirectory, finalization, locks, activity);
+  const exportService = createExportService(store, options.dataDirectory, options.ffmpeg ?? createFFmpegAdapter());
   try {
     await chunks.reconcile();
     await finalization.reconcile();
@@ -53,15 +57,22 @@ export async function startServer(options: ServerOptions) {
   let closing: Promise<void> | undefined;
   return {
     server,
+    exportService,
     origin: `http://${host}`,
     close(): Promise<void> {
-      closing ??= new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-          store.close();
-          if (error) reject(error); else resolve();
+      closing ??= (async () => {
+        let closeError: Error | undefined;
+        await new Promise<void>(resolve => {
+          server.close(error => {
+            if (error) closeError = error;
+            resolve();
+          });
+          server.closeAllConnections();
         });
-        server.closeAllConnections();
-      });
+        try { await exportService.close(); }
+        finally { store.close(); }
+        if (closeError) throw closeError;
+      })();
       return closing;
     },
   };

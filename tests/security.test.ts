@@ -65,8 +65,12 @@ test('listens only on IPv4 loopback and truthfully reports reliability capabilit
   assert.equal(parsed.data.export, false);
   assert.equal(response.headers.get('x-powered-by'), null);
   assert.equal(response.headers.get('permissions-policy'), 'camera=(self), microphone=(self), display-capture=(self)');
-  assert.match(response.headers.get('content-security-policy') ?? '', /media-src 'self' blob:/);
-  assert.match(response.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+  const policy = response.headers.get('content-security-policy') ?? '';
+  assert.match(policy, /script-src 'self' 'wasm-unsafe-eval'/);
+  assert.doesNotMatch(policy, /'unsafe-eval'/);
+  assert.match(policy, /connect-src 'self'/);
+  assert.match(policy, /media-src 'self' blob:/);
+  assert.match(policy, /frame-ancestors 'none'/);
 });
 
 test('accepts an authenticated same-origin JSON write check', async () => {

@@ -5,7 +5,9 @@ import { DurableRecordingEngine, initialDurableRecordingSnapshot, type DurableRe
 import { RecordingEngine, formatBytes, initialRecordingSnapshot, type RecordingStatus } from '../media/recording-engine.js';
 import { Banner } from '../ui/Banner.js';
 import { Icon } from '../ui/Icon.js';
+import { isRecordingShortcutTargetBlocked, resolveRecordingShortcut, type RecordingShortcutAction } from '../ui/keyboard-shortcuts.js';
 import { ProgressBar } from '../ui/ProgressBar.js';
+import { useModalFocus } from '../ui/useModalFocus.js';
 import {
   deriveRecordingDockActions,
   deriveUploadProgress,
@@ -48,14 +50,33 @@ export function RecordingPanel({
 }: RecordingPanelProps) {
   const temporary = useRef<RecordingEngine | null>(null);
   const durable = useRef<DurableRecordingEngine | null>(null);
+  const optionsDialog = useRef<HTMLDivElement | null>(null);
+  const optionsCloseButton = useRef<HTMLButtonElement | null>(null);
   const modeSelectedByUser = useRef(false);
   const startNowRef = useRef<() => void>(() => {});
+  const shortcutAvailabilityRef = useRef({
+    enabled: true,
+    modalOpen: false,
+    countdownActive: false,
+    canStart: false,
+    canStop: false,
+    canPause: false,
+    canResume: false,
+  });
+  const shortcutActionsRef = useRef<Record<RecordingShortcutAction, () => void>>({
+    start: () => {},
+    stop: () => {},
+    pause: () => {},
+    resume: () => {},
+    'cancel-countdown': () => {},
+  });
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
   const [mode, setMode] = useState<RecordingMode>(() => durableAvailable ? 'durable' : 'temporary');
   const [title, setTitle] = useState('Untitled recording');
   const [countdownEnabled, setCountdownEnabled] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [shortcutsEnabled, setShortcutsEnabled] = useState(true);
   const [optionsModalOpen, setOptionsModalOpen] = useState(false);
   const [temporaryState, setTemporaryState] = useState(() => initialRecordingSnapshot());
   const [durableState, setDurableState] = useState(() => initialDurableRecordingSnapshot());
@@ -71,6 +92,8 @@ export function RecordingPanel({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [optionsModalOpen]);
+
+  useModalFocus(optionsModalOpen, optionsDialog, optionsCloseButton);
 
   useEffect(() => {
     const temporaryRecorder = new RecordingEngine();
@@ -156,6 +179,48 @@ export function RecordingPanel({
   function stop() { if (mode === 'durable') durable.current?.stop(); else temporary.current?.stop(); }
   function reset() { if (mode === 'durable') void durable.current?.reset(); else temporary.current?.reset(); }
 
+  shortcutAvailabilityRef.current = {
+    enabled: shortcutsEnabled,
+    modalOpen: optionsModalOpen,
+    countdownActive: countdown !== null,
+    canStart: Boolean(dockActions.startLabel) && videoReady && !controlsLocked && (mode !== 'durable' || (durableAvailable && Boolean(title.trim()))),
+    canStop: dockActions.showStop,
+    canPause: dockActions.showPause,
+    canResume: dockActions.showResume,
+  };
+  shortcutActionsRef.current = {
+    start,
+    stop,
+    pause,
+    resume,
+    'cancel-countdown': () => setCountdown(null),
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const availability = shortcutAvailabilityRef.current;
+      const action = resolveRecordingShortcut({
+        key: event.key,
+        enabled: availability.enabled,
+        blocked: availability.modalOpen || isRecordingShortcutTargetBlocked(event.target),
+        repeat: event.repeat,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+        countdownActive: availability.countdownActive,
+        canStart: availability.canStart,
+        canStop: availability.canStop,
+        canPause: availability.canPause,
+        canResume: availability.canResume,
+      });
+      if (!action) return;
+      event.preventDefault();
+      shortcutActionsRef.current[action]();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const showQueueTelemetry = mode === 'durable'
     ? (durableState.queuedChunks > 0 || durableState.acknowledgedChunks > 0 || durableState.status !== 'idle')
     : (temporaryState.bytes > 0 || temporaryState.status !== 'idle');
@@ -229,13 +294,14 @@ export function RecordingPanel({
             if (event.target === event.currentTarget) setOptionsModalOpen(false);
           }}
         >
-          <div className="panel scene-modal" role="dialog" aria-modal="true" aria-labelledby="recording-options-title">
+          <div ref={optionsDialog} className="panel scene-modal" role="dialog" aria-modal="true" aria-labelledby="recording-options-title">
             <div className="panel-heading scene-modal__header">
               <div className="scene-modal__title-group">
                 <h2 id="recording-options-title">Recording options</h2>
                 <span className="badge">{mode === 'durable' ? 'Save to computer' : 'Quick browser test'}</span>
               </div>
               <button
+                ref={optionsCloseButton}
                 type="button"
                 className="secondary button-compact scene-modal__close"
                 aria-label="Close recording options"
@@ -291,6 +357,18 @@ export function RecordingPanel({
                 <span>
                   <strong>3-second countdown</strong>
                   <small>Optional preparation time before encoding starts.</small>
+                </span>
+              </label>
+              <label className="recording-countdown-option">
+                <input
+                  type="checkbox"
+                  aria-label="Keyboard recording shortcuts"
+                  checked={shortcutsEnabled}
+                  onChange={event => setShortcutsEnabled(event.target.checked)}
+                />
+                <span>
+                  <strong>Keyboard shortcuts</strong>
+                  <small>R starts/stops · P pauses/resumes · Escape cancels the countdown. Shortcuts are ignored while typing, adjusting sliders, using dialogs, or dragging the stage.</small>
                 </span>
               </label>
             </div>

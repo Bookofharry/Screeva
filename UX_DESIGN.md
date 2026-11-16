@@ -352,9 +352,9 @@ The following 7 foundational primitives are already implemented in `apps/client/
 | `AppShell` & `TopBar` | **Planned (`UX-1`)** | Persistent studio header, navigation switcher (`Studio`, `Recordings`, `Recovery`, `Diagnostics`), service status pill, and active `● REC` indicator. |
 | `SourceCard` | **Planned (`UX-2`)** | Unified card per source (`Screen`, `Camera`, `Microphone`) combining device `<select>`, primary `Start`/`Switch`/`Share` button, `Stop` button, status line, and inline error alert. |
 | `LayoutPresetPicker` | **Planned (`UX-2`)** | Visual 4-preset selector (`Screen only`, `Camera only`, `Picture in picture`, `Split screen`) backed by native accessible controls plus keeping the `<select aria-label="Layout">` contract intact. |
-| `RecordingDock` | **Planned (`UX-3`)** | Sticky bottom control bar housing `Session title`, storage mode radios, readiness pills, `Start recording` / `Pause` / `Resume` / `Stop`, duration `<time>`, upload/finalization progress, and completion tray. |
-| `SessionLibraryPanel` | **Planned (`UX-4`)** | Read-only session history list powered by `GET /api/v1/sessions` with cursor pagination and truthful status/size/duration badges. |
-| `ConfirmDialog` | **Planned (`UX-4`)** | Native `<dialog>` modal with focus restoration and `Escape` handling for explicit salvage confirmation or future destructive actions. |
+| `RecordingDock` | **Implemented (`UX-3`, verified 2026-11-13)** | Sticky bottom control bar housing session options, state-driven transport actions, duration `<time>`, countdown, upload/finalization progress, retry/offline feedback, and output-gated completion tray. |
+| `SessionLibraryPanel` | **Implemented (`UX-4`, verified 2026-11-14)** | Read-only session history list powered by `GET /api/v1/sessions` with cursor pagination and truthful status/size/duration badges. |
+| `ConfirmDialog` | **Deferred to a destructive Phase 5 action** | Salvage is explicit, idempotent and preserves chunks; no delete/export mutation exists in UX-4, so a destructive confirmation dialog would be unused. |
 
 ---
 
@@ -437,25 +437,30 @@ This plan aligns with [`TASKS_UX_SECTION.md`](file:///c:/Users/hp/Desktop/Projec
   - Applied across `AppShell` (connectivity dot shown only when `serviceState === 'connected'`), Studio preview stage, layout presets, `44×44px` PIP corner handle, live source/audio rails, recording dock, banners, and recovery views without touching media or persistence services.
 - **Acceptance tests:** Verified by [`tests/design-tokens.test.ts`](file:///c:/Users/hp/Desktop/Projects/screen%20and%20video%20recorder/tests/design-tokens.test.ts) (`94 passed`, including alpha-composited backdrop contrast checks) and all **37 passing Chromium E2E tests**. Optional light mode (`COLOR-4`) remains deferred.
 
-### `UX-3` — State-Driven Recording Dock & Truthful Saving Feedback
+### `UX-3` — State-Driven Recording Dock & Truthful Saving Feedback (**Completed & Verified 2026-11-13**)
 - **Deliverables:**
   - Sticky bottom recording dock with `Durable local session` selected by default when the local service is connected (while keeping `Temporary browser preview` selectable).
   - State-aware primary button styling (`Start recording` when ready, `Stop` primary + `Pause` secondary when recording, `Resume` primary when paused, `Start new recording` when completed/failed).
   - Prominent active recording indicator in TopBar/dock, `document.title` recording status prefix, optional skippable 3-second countdown (encoding starts only after countdown finishes), and `beforeunload` warning while `recording`, `paused`, `stopping`, `uploading`, `retrying`, or `finalizing`.
   - Determinate upload drain `ProgressBar` during `uploading`, indeterminate `ProgressBar` during `stopping`/`finalizing`, clear retry warning banner during `retrying`, and truthful `Saved locally` card only when `output !== null`.
-- **Acceptance tests:** Unit tests for derived dock states; E2E tests verifying no false `Saved locally` on failed/interrupted finalization, `beforeunload` registration only during active states, and both durable and temporary E2E recording tests passing.
+- **Acceptance tests:** Pure dock-state tests cover action priority, unload phases, upload progress and title derivation. Chromium verifies connected-default durable mode, temporary mode, countdown/skip, `beforeunload`, active/restored titles, progress, successful real MediaRecorder completion and rejected finalization without false `Saved locally`. `npm run check` passed 288/288 with zero skips; all 39 Chromium tests passed. Physical hardware, Edge, screen-reader and moderated usability acceptance remain separate.
 
-### `UX-4` — Session Library & Interrupted Recovery Experience
+### `UX-4` — Session Library & Interrupted Recovery Experience (**Completed & Verified 2026-11-14**)
 - **Deliverables:**
   - Add client API helper for `GET /api/v1/sessions` and render the `Recordings` view showing persisted sessions (title, created time, layout/resolution, lifecycle badge, chunk count, and verified output size/duration when `completed`) without inventing unimplemented playback/delete/export buttons.
   - Enhance `RecoveryPanel` with human-readable condition badges alongside existing verified chunk/byte counts, surface a top banner/badge when unfinished sessions exist on launch, and automatically refresh recovery state after any durable recording failure in the current tab.
 - **Acceptance tests:** E2E test verifying newly created/completed sessions appear in `Recordings`, durable failure auto-refreshes recovery, and `Salvage acknowledged chunks` completes idempotently only after probe validation.
+- **Verified result:** Authoritative recovery inspection drives launch attention, active leases are excluded until a bounded post-failure follow-up observes expiry, and cards distinguish verified incomplete, empty, active, corrupt, unavailable, finalizing and completed evidence. The library remains deliberately read-only and does not fabricate Phase 5 playback/download/delete/export controls.
+- **Evidence:** `npm run check` passed 291/291 with trusted FFprobe and production build; `npm run test:e2e` passed 39/39; live built-app screenshots and accessibility snapshots covered Studio, empty Recordings and empty Recovery with no overlay or console errors. Physical hardware, Edge, screen-reader and participant validation remain UX-5/external acceptance.
 
-### `UX-5` — Accessibility, Responsive Ergonomics, and Usability Validation
+### `UX-5` — Accessibility, Responsive Ergonomics, and Usability Validation (**Automated Portion Verified 2026-11-14; Manual Acceptance Open**)
 - **Deliverables:**
   - Keyboard shortcuts (`R` record/stop, `P` pause/resume, `Escape` cancel countdown) guarded per WCAG 2.2 SC 2.1.4 (toggleable off switch, disabled inside `input`/`select`/`textarea`/slider/PIP drag, ignored when Ctrl/Alt/Meta are held).
   - Full keyboard-only navigation pass, `prefers-reduced-motion` verification, `375px` / `768px` / `1280px` / `1440px` layout verification, and documented protocol/log for 5-user moderated usability sessions and Windows screen-reader checks.
 - **Acceptance tests:** Unit + E2E tests for shortcut guards, contrast/primitive suites, and zero horizontal overflow across all four viewports.
+- **Verified automated result:** Pure shortcut decisions and a single current-ref listener implement the `R`, `P` and Escape actions without duplicating recorder state. The visible off switch and guards cover repeat/modifier, form/editable, slider, open-dialog and compositor-drag contexts. Recording and Scene dialogs contain and restore focus. All five rendered workspaces have zero horizontal overflow at the four target viewports, and reduced-motion token checks remain active.
+- **Evidence:** `npm run check` passed 295/295 with trusted FFprobe and production build; `npm run test:e2e` passed 40/40; live built-app inspection found no overlay/console errors and exposed the shortcut control correctly.
+- **Still required:** The repository protocol at `reports/ux5-accessibility-usability.md` has deliberately empty Narrator, NVDA and P1–P5 result rows. UX-5 is not complete until those real sessions plus physical-device/permission evidence are recorded; local Chromium automation is not a substitute.
 
 ---
 

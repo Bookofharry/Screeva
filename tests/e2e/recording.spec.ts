@@ -81,8 +81,9 @@ async function installRecordingSources(page: Page) {
     }
 
     navigator.mediaDevices.getUserMedia = async constraints => {
-      if (!constraints?.audio) throw new DOMException('Only microphone audio is provided', 'NotSupportedError');
-      return microphoneStream();
+      if (constraints?.video) return displayStream();
+      if (constraints?.audio) return microphoneStream();
+      throw new DOMException('Only synthetic camera or microphone input is provided', 'NotSupportedError');
     };
     navigator.mediaDevices.getDisplayMedia = async () => displayStream();
     window.recordingTest = {
@@ -280,7 +281,70 @@ test('UX-3 defaults to durable, supports a skippable countdown, guards unsafe un
   expect(await beforeUnloadIsPrevented(page)).toBe(false);
 });
 
-test('UX-3 never renders Saved locally when durable finalization is rejected', async ({ page }) => {
+test('UX-5 recording shortcuts respect the off switch, form guards, countdown, and recorder state', async ({ page }) => {
+  await installRecordingSources(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Share screen', exact: true }).click();
+  await page.getByRole('button', { name: 'Start camera', exact: true }).click();
+
+  const pipDrag = page.getByRole('button', { name: 'Move webcam overlay' });
+  await pipDrag.hover();
+  await page.mouse.down();
+  await expect(page.locator('html')).toHaveAttribute('data-compositor-dragging', '');
+  await page.keyboard.press('r');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Ready');
+  await page.mouse.up();
+  await expect(page.locator('html')).not.toHaveAttribute('data-compositor-dragging', '');
+
+  await page.getByRole('button', { name: 'Recording options' }).click();
+  await expect(page.getByRole('button', { name: 'Close recording options' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Done', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Close recording options' })).toBeFocused();
+  const title = page.getByLabel('Recording name');
+  await title.focus();
+  await page.keyboard.press('r');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Ready');
+
+  await page.getByRole('radio', { name: 'Temporary browser preview' }).check();
+  await page.getByLabel('3-second countdown').check();
+  const shortcutToggle = page.getByRole('checkbox', { name: 'Keyboard recording shortcuts' });
+  await shortcutToggle.uncheck();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Recording options' })).toBeFocused();
+  await page.keyboard.press('r');
+  await expect(page.getByText('Starting in 3')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Start recording', exact: true }).click();
+  await expect(page.locator('.recording-countdown')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.recording-countdown')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Recording options' }).click();
+  await shortcutToggle.check();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.keyboard.press('r');
+  await expect(page.getByText('Starting in 3')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('Starting in 3')).toHaveCount(0);
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Ready');
+
+  await page.getByRole('button', { name: 'Recording options' }).click();
+  await page.getByLabel('3-second countdown').uncheck();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.keyboard.press('r');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toContainText('REC');
+  await page.keyboard.press('p');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Paused');
+  await page.keyboard.press('P');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toContainText('REC');
+  await page.keyboard.press('r');
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Completed', { timeout: 10_000 });
+  await expect(page.getByLabel('Recorded WebM preview')).toBeVisible();
+});
+
+test('UX-3/UX-4 rejects false save and refreshes verified recovery after the activity lease expires', async ({ page }) => {
   await page.route('**/api/v1/sessions/*/finalize', route => route.fulfill({
     status: 409,
     contentType: 'application/json',
@@ -297,9 +361,14 @@ test('UX-3 never renders Saved locally when durable finalization is rejected', a
   await expect(page.getByRole('alert')).toContainText('Injected finalization conflict.');
   await expect(page.getByText('Saved locally')).toHaveCount(0);
   expect(await beforeUnloadIsPrevented(page)).toBe(false);
+  await expect(page.getByRole('status', { name: 'Interrupted recording notice' })).toContainText('can be salvaged best-effort', { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Review Recovery' }).click();
+  const recoverableCard = page.locator('.recovery-list li').filter({ hasText: 'Verified incomplete' });
+  await expect(recoverableCard.getByRole('status', { name: /recovery condition/ })).toHaveText('Verified incomplete');
+  await expect(page.getByText(/browser memory was never received and cannot be recovered/i)).toBeVisible();
 });
 
-test('recovery UI inspects and salvages only server-acknowledged interrupted chunks', async ({ page }) => {
+test('launch recovery follows a stale activity lease and salvages only server-acknowledged chunks', async ({ page }) => {
   await page.goto('/');
   const sessionId = await page.evaluate(async () => {
     const bootstrap = await fetch('/api/v1/bootstrap', { headers: { 'X-Recorder-Bootstrap': '1' } });
@@ -317,12 +386,15 @@ test('recovery UI inspects and salvages only server-acknowledged interrupted chu
       'X-Recorder-Chunk-Sha256': digest, 'X-Recorder-Chunk-Timestamp': new Date().toISOString(),
     }, body: bytes });
     if (!uploaded.ok) throw new Error(`Upload failed: ${uploaded.status}`);
+    const heartbeat = await fetch(`/api/v1/sessions/${id}/heartbeat`, { method: 'POST', headers: common, body: '{}' });
+    if (!heartbeat.ok) throw new Error(`Heartbeat failed: ${heartbeat.status}`);
     return id;
   });
-  await page.goto('/#recovery');
-  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.goto('/');
+  await expect(page.getByRole('status', { name: 'Interrupted recording notice' })).toContainText('can be salvaged best-effort', { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Review Recovery' }).click();
   await expect(page.getByText('Browser recovery fixture')).toBeVisible();
-  await expect(page.getByText(/valid-incomplete/)).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Browser recovery fixture recovery condition' })).toHaveText('Verified incomplete', { timeout: 15_000 });
   await page.locator('.recovery-list li').filter({ hasText: 'Browser recovery fixture' }).getByRole('button', { name: 'Salvage acknowledged chunks' }).click();
   await expect(page.getByText('Browser recovery fixture')).toHaveCount(0);
   const completed = await page.evaluate(async id => {

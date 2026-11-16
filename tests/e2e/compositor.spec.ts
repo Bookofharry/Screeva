@@ -1,15 +1,27 @@
 import { expect, test, type Page } from '@playwright/test';
+import { createHash } from 'node:crypto';
 
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
 
 declare global {
   interface Window {
     compositorTest: { streams: MediaStream[]; output?: MediaStream; stopped(): string[] };
+    realFaceTest: { stream: MediaStream | null };
   }
 }
 
 async function syntheticSources(page: Page) {
   await page.addInitScript(() => {
+    class SyntheticFaceDetector {
+      async detect(source: CanvasImageSource) {
+        const video = source as HTMLVideoElement;
+        return [{
+          boundingBox: { x: video.videoWidth * 0.05, y: video.videoHeight * 0.25, width: video.videoWidth * 0.18, height: video.videoHeight * 0.25 },
+          confidence: 0.95,
+        }];
+      }
+    }
+    (globalThis as typeof globalThis & { FaceDetector?: typeof SyntheticFaceDetector }).FaceDetector = SyntheticFaceDetector;
     const streams: MediaStream[] = [];
     const timers: number[] = [];
     const media = navigator.mediaDevices;
@@ -25,11 +37,13 @@ async function syntheticSources(page: Page) {
       const paint = () => {
         if (kind === 'screen') {
           drawing.fillStyle = '#204c71'; drawing.fillRect(0, 0, 640, 480);
+          drawing.fillStyle = '#d06a32'; drawing.fillRect(480, 0, 160, 480);
           drawing.fillStyle = '#ffffff'; drawing.fillRect((frame++ * 5) % 600, 40, 40, 40);
         } else if (kind === 'camera-a') {
           drawing.fillStyle = '#cc3333'; drawing.fillRect(0, 0, 640, 60);
           drawing.fillStyle = '#28674e'; drawing.fillRect(0, 60, 640, 360);
           drawing.fillStyle = '#304dcc'; drawing.fillRect(0, 420, 640, 60);
+          drawing.fillStyle = '#d1972f'; drawing.fillRect(0, 60, 260, 360);
         } else {
           drawing.fillStyle = '#9b3fa8'; drawing.fillRect(0, 0, 640, 480);
         }
@@ -59,6 +73,126 @@ async function syntheticSources(page: Page) {
     window.addEventListener('unload', () => timers.forEach(timer => window.clearInterval(timer)));
   });
 }
+
+async function officialPortraitBase64(): Promise<string> {
+  const response = await fetch('https://storage.googleapis.com/mediapipe-assets/portrait.jpg');
+  if (!response.ok) throw new Error(`Unable to fetch the pinned MediaPipe portrait fixture (${response.status}).`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  expect(hash).toBe('a6f11efaa834706db23f275b6115058fa87fc7f14362681e6abe14e82749de3e');
+  return bytes.toString('base64');
+}
+
+async function realMediaPipePortraitSource(page: Page): Promise<void> {
+  const portraitBase64 = await officialPortraitBase64();
+  await page.addInitScript(async ({ portrait }) => {
+    const media = navigator.mediaDevices;
+    media.enumerateDevices = async () => [
+      { deviceId: 'portrait-camera', label: 'Pinned MediaPipe portrait', kind: 'videoinput' },
+    ] as MediaDeviceInfo[];
+    window.realFaceTest = { stream: null };
+    media.getUserMedia = async constraints => {
+      if (!constraints?.video) throw new DOMException('Only video is available.', 'NotSupportedError');
+      const binary = atob(portrait);
+      const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+      const image = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d')!;
+      const draw = () => context.drawImage(image, 0, 0);
+      const stream = canvas.captureStream(12);
+      draw();
+      const timer = window.setInterval(draw, 80);
+      const track = stream.getVideoTracks()[0]!;
+      const stop = track.stop.bind(track);
+      track.stop = () => { window.clearInterval(timer); stop(); };
+      window.realFaceTest.stream = stream;
+      return stream;
+    };
+  }, { portrait: portraitBase64 });
+}
+
+test('local auto framing smooths the camera crop and does not own camera tracks', async ({ page }) => {
+  await syntheticSources(page);
+  await page.route('**/vision/wasm/**', route => route.abort());
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Auto frame off' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Start camera', exact: true }).click();
+  await waitForPixel(page, 640, 360, [40, 103, 78, 255]);
+  await page.getByRole('button', { name: 'Auto frame off' }).click();
+  await expect(page.getByRole('button', { name: 'Auto frame on' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await expect(page.getByText('1 face detected; framing is following the primary presenter.')).toBeVisible();
+  await expect(page.getByLabel('Face detector performance')).toContainText('12 Hz');
+  await expect(page.getByLabel('Face detector performance')).toContainText('tracking');
+  await waitForPixel(page, 640, 360, [209, 151, 47, 255]);
+  const cameraStateBeforeDisable = await page.evaluate(() => window.compositorTest.streams[0]?.getVideoTracks()[0]?.readyState);
+  expect(cameraStateBeforeDisable).toBe('live');
+  await page.getByLabel('Manual', { exact: true }).check();
+  expect(await page.evaluate(() => window.compositorTest.streams[0]?.getVideoTracks()[0]?.readyState)).toBe('live');
+  await expect(page.getByText('Manual framing at 1.0×. Camera frames are not analyzed.')).toBeVisible();
+  await waitForPixel(page, 640, 360, [40, 103, 78, 255]);
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: 'Stop all capture' }).click();
+});
+
+test('self-hosted MediaPipe detects a real portrait without runtime network egress', async ({ page }) => {
+  test.setTimeout(45_000);
+  await realMediaPipePortraitSource(page);
+  const requested: string[] = [];
+  page.on('request', request => requested.push(request.url()));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Start camera', exact: true }).click();
+  await page.getByRole('button', { name: 'Auto frame off' }).click();
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await expect(page.getByText('1 face detected; framing is following the primary presenter.')).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByLabel('Face detector performance')).toContainText('Faces1');
+  expect(requested.some(url => url.includes('/vision/wasm/vision_wasm_internal'))).toBe(true);
+  expect(requested.some(url => url.endsWith('/vision/models/blaze_face_short_range.tflite'))).toBe(true);
+  expect(requested.filter(url => !url.startsWith('http://127.0.0.1:4318/'))).toEqual([]);
+  await page.getByLabel('Manual', { exact: true }).check();
+  expect(await page.evaluate(() => window.realFaceTest.stream?.getVideoTracks()[0]?.readyState)).toBe('live');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: 'Stop all capture' }).click();
+});
+
+test('manual camera zoom and pan override auto framing and are restored without stopping the camera', async ({ page }) => {
+  await syntheticSources(page);
+  await page.route('**/vision/wasm/**', route => route.abort());
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await expect(page.getByRole('slider', { name: 'Camera zoom' })).toBeDisabled();
+  await expect(page.getByLabel('Automatic', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: 'Start camera', exact: true }).click();
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await expect(page.getByLabel('Manual', { exact: true })).toBeChecked();
+  await waitForPixel(page, 100, 360, [209, 151, 47, 255]);
+
+  await page.getByRole('slider', { name: 'Camera zoom' }).fill('200');
+  await page.getByRole('slider', { name: 'Camera horizontal position' }).fill('100');
+  await page.getByRole('slider', { name: 'Camera vertical position' }).fill('50');
+  await expect(page.getByText('Manual framing at 2.0×. Camera frames are not analyzed.')).toBeVisible();
+  await waitForPixel(page, 100, 360, [40, 103, 78, 255]);
+  expect(await page.evaluate(() => window.compositorTest.streams[0]?.getVideoTracks()[0]?.readyState)).toBe('live');
+
+  await page.getByLabel('Automatic', { exact: true }).check();
+  await expect(page.getByText('1 face detected; framing is following the primary presenter.')).toBeVisible();
+  await waitForPixel(page, 100, 360, [209, 151, 47, 255]);
+
+  await page.getByLabel('Manual', { exact: true }).check();
+  await expect(page.getByRole('slider', { name: 'Camera zoom' })).toHaveValue('200');
+  await expect(page.getByRole('slider', { name: 'Camera horizontal position' })).toHaveValue('100');
+  await waitForPixel(page, 100, 360, [40, 103, 78, 255]);
+
+  await page.getByRole('button', { name: 'Reset manual framing' }).click();
+  await expect(page.getByRole('slider', { name: 'Camera zoom' })).toHaveValue('100');
+  await waitForPixel(page, 100, 360, [209, 151, 47, 255]);
+  expect(await page.evaluate(() => window.compositorTest.streams[0]?.getVideoTracks()[0]?.readyState)).toBe('live');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: 'Stop all capture' }).click();
+});
 
 async function pixel(page: Page, x: number, y: number): Promise<number[]> {
   return page.getByLabel('Composed video preview').evaluate((canvas: HTMLCanvasElement, point) => {
@@ -95,7 +229,7 @@ test('renders all layouts with preserved aspect ratios, normalized PIP and adjus
   await waitForPixel(page, 300, 360, [32, 76, 113, 255]);
   await waitForPixel(page, 1100, 360, [40, 103, 78, 255]);
   await page.getByRole('slider', { name: 'Screen proportion' }).fill('40');
-  await waitForPixel(page, 700, 360, [40, 103, 78, 255]);
+  await waitForPixel(page, 900, 360, [40, 103, 78, 255]);
 
   await page.getByLabel('Layout').selectOption('pip');
   await waitForPixel(page, 1050, 550, [40, 103, 78, 255]);
@@ -104,6 +238,65 @@ test('renders all layouts with preserved aspect ratios, normalized PIP and adjus
   await page.getByLabel('Resolution').selectOption('1080p');
   await expect(page.getByLabel('Composed video preview')).toHaveJSProperty('width', 1920);
   await expect(page.getByLabel('Composed video preview')).toHaveJSProperty('height', 1080);
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: 'Stop all capture' }).click();
+});
+
+test('selects, resets and invalidates an aspect-preserving screen focus without stopping borrowed tracks', async ({ page }) => {
+  await syntheticSources(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await expect(page.getByRole('button', { name: 'Select focus area' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Share screen', exact: true }).click();
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await expect(page.getByText('Full shared screen is visible.')).toBeVisible();
+  await page.getByRole('button', { name: 'Select focus area' }).click();
+  const selector = page.getByRole('region', { name: 'Select screen focus area' });
+  const sourcePreview = page.getByLabel('Full shared screen for focus selection');
+  await expect(selector).toBeVisible();
+  await expect.poll(() => sourcePreview.evaluate((video: HTMLVideoElement) => video.videoWidth)).toBe(640);
+
+  await page.keyboard.press('Escape');
+  await expect(selector).toBeHidden();
+  await waitForPixel(page, 640, 360, [32, 76, 113, 255]);
+
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await page.getByRole('button', { name: 'Select focus area' }).click();
+  const box = await selector.boundingBox();
+  if (!box) throw new Error('Screen focus selector is missing');
+  const contentHeight = box.height;
+  const contentWidth = contentHeight * 4 / 3;
+  const contentLeft = box.x + (box.width - contentWidth) / 2;
+  await page.mouse.move(contentLeft + contentWidth * 0.75, box.y + contentHeight * 0.35);
+  await page.mouse.down();
+  await page.mouse.move(contentLeft + contentWidth * 0.98, box.y + contentHeight * 0.65);
+  await page.mouse.up();
+  await expect(selector).toBeHidden();
+  await waitForPixel(page, 640, 360, [208, 106, 50, 255]);
+  expect(await page.evaluate(() => window.compositorTest.streams[0]?.getVideoTracks()[0]?.readyState)).toBe('live');
+
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await expect(page.getByText(/Custom source region selected/)).toBeVisible();
+  await page.getByRole('button', { name: 'Save current focus as Code preset' }).click();
+  await expect(page.getByRole('button', { name: 'Apply Code focus preset' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Apply Code focus preset' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Reset screen focus' }).click();
+  await expect(page.getByText(/Smoothly transitioning/)).toBeVisible();
+  await waitForPixel(page, 640, 360, [32, 76, 113, 255]);
+  await page.getByRole('button', { name: 'Apply Code focus preset' }).click();
+  await expect(page.getByText(/Smoothly transitioning/)).toBeVisible();
+  await waitForPixel(page, 640, 360, [208, 106, 50, 255]);
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Change shared source', exact: true }).click();
+  await waitForPixel(page, 640, 360, [32, 76, 113, 255]);
+  expect(await page.evaluate(() => window.compositorTest.streams[0]?.getVideoTracks()[0]?.readyState)).toBe('ended');
+  expect(await page.evaluate(() => window.compositorTest.streams[1]?.getVideoTracks()[0]?.readyState)).toBe('live');
+  await page.getByRole('button', { name: 'Scene & output settings' }).click();
+  await expect(page.getByText('Full shared screen is visible.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apply Code focus preset' })).toBeDisabled();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: 'Stop all capture' }).click();
 });
@@ -262,6 +455,17 @@ test('two-column studio keeps composed preview, layout presets, 44px PIP handle 
   expect(metrics.twoColumnSideBySide).toBe(true);
   expect(metrics.resizeWidth).toBeGreaterThanOrEqual(44);
   expect(metrics.resizeHeight).toBeGreaterThanOrEqual(44);
+
+  const sceneTrigger = page.getByRole('button', { name: 'Scene & output settings' });
+  await sceneTrigger.click();
+  await expect(page.getByRole('button', { name: 'Close scene settings' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Done', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Close scene settings' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Scene & output settings' })).toBeHidden();
+  await expect(sceneTrigger).toBeFocused();
 
   const presets = page.getByRole('group', { name: 'Scene composition presets' });
   await presets.getByRole('button', { name: 'Split', exact: true }).click();

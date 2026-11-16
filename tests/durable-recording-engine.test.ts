@@ -183,6 +183,33 @@ test('source loss and terminal authorization failure stop safely without claimin
   await source.dispose();
 });
 
+test('HTML fallback responses fail start with actionable service guidance instead of a JSON syntax error', async () => {
+  const recorder = recorderHarness();
+  const video = new Track('video');
+  const controller = new DurableRecordingEngine({
+    engine: recorder.engine,
+    runtime: {
+      fetch: async () => new Response('<!DOCTYPE html><title>Screeva</title>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+      setTimer: () => 1,
+      clearTimer: () => undefined,
+    },
+  });
+  try {
+    assert.equal(await controller.start(media(new Stream([video])), null, 'Static host', configuration), false);
+    const snapshot = controller.getSnapshot();
+    assert.equal(snapshot.status, 'failed');
+    assert.match(snapshot.error, /response was not JSON.*loopback.*Quick browser test/i);
+    assert.doesNotMatch(snapshot.error, /Unexpected token/i);
+    assert.equal(snapshot.sessionId, '');
+    assert.equal(video.stops, 0);
+  } finally {
+    await controller.dispose();
+  }
+});
+
 test('duplicate start, queue memory saturation and reload disposal cannot silently complete a session', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'recorder-durable-races-'));
   const running = await startServer({ port: 0, dataDirectory: path.join(root, 'data') });

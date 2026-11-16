@@ -12,8 +12,10 @@
     "packages/*"
   ],
   "scripts": {
+    "prepare:vision": "node scripts/prepare-vision-assets.mjs",
+    "postinstall": "npm run prepare:vision",
     "dev": "node scripts/dev.mjs",
-    "build": "npm run build -w @recorder/client && tsc -p apps/server/tsconfig.build.json",
+    "build": "npm run prepare:vision && npm run build -w @recorder/client && tsc -p apps/server/tsconfig.build.json",
     "start": "node dist/apps/server/src/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -25,6 +27,7 @@
     "licenses": "node scripts/licenses.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "0.10.21",
     "express": "5.3.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
