@@ -332,6 +332,19 @@
 
 **Consequences:** The first export baseline is resource-bounded, injection-resistant and preserves recording evidence on both success and failure. Real FFmpeg/FFprobe acceptance establishes H.264/AAC playability, but jobs and success metadata do not survive restart and no user can invoke or observe them through the application yet. Task 2 must define authenticated API/UI lifecycle, progress, cancellation, retry and stale-temporary/output reconciliation before `export` becomes a public capability. Task 3 must define quality presets and codec probing. POSIX directory publication is fsynced; Windows relies on file flush plus atomic rename because Node returns `EPERM` for directory fsync, so sudden-power-loss durability remains unclaimed. FFmpeg/FFprobe remain separately installed GPL tools rather than npm dependencies, leaving the repository's MIT source license and dependency graph unchanged.
 
+## ADR-037 — Export orchestration uses a durable one-job-per-session ledger and attempt generations
+**Status:** Accepted.
+
+**Date:** 2026-11-16.
+
+**Context:** User-accessible export needs truthful progress, cancellation, retry and restart cleanup without allowing browser paths, exposing FFmpeg diagnostics, losing completed output state, or permitting a late cancelled process to overwrite a retry. In-memory Task 1 jobs cannot distinguish a successful prior export after restart. Client-visible downloads also require stronger protection than an unauthenticated local GET.
+
+**Decision:** Add SQLite schema v5 with one strict export job per finalized session. Persist status, integer progress, attempt generation, timestamps, safe error and output length/SHA-256. Parse fixed FFmpeg progress output relative to trusted finalization duration and cap it at 99 until atomic publication succeeds. Cancellation persists before aborting the child; retry retains job identity and increments attempts. Every asynchronous completion checks the captured attempt generation and current running state. On startup remove only recognized temporaries/orphan MP4s, resume queued/interrupted work and revalidate completed MP4 metadata. Require same-origin per-launch token authorization for job inspection and streaming file delivery as well as mutations. Keep client tokens in memory and use one abortable polling timer. Do not buffer exported media into a browser Blob; defer bounded/native download UX to the library task.
+
+**Alternatives:** Keep jobs in memory; create a new job ID for every retry; infer progress from output file size; mark completed when FFmpeg exits before file flush/rename; cancel without durable state; expose downloads as unauthenticated GETs; delete the WebM after MP4 success; place all export state in React; introduce quality presets during orchestration.
+
+**Consequences:** Export state and verified output survive clean restart, cancellation/retry races are deterministic, corrupt/missing MP4s fail closed, and the original WebM/chunks remain protected. One job per session makes queue requests idempotent and keeps retry history as an attempt count rather than multiple ambiguous outputs. A cancelled or failed job can be retried up to 100 attempts. Progress may remain low or indeterminate-looking when source duration is unavailable, and Windows still cannot fsync directories through Node. Quality/codec probing is deliberately deferred to Task 3; preview, aggregate storage and deletion remain Task 4.
+
 ## Template for a new decision
 ```md
 ## ADR-XXX — Title

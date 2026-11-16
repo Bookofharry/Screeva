@@ -5,6 +5,7 @@ import { apiRoutes } from './routes/api.js';
 import { authenticatedWrites, createWriteToken, localOnly } from './security.js';
 import type { ChunkIngestionService } from './services/chunks.js';
 import type { FinalizationService } from './services/finalization.js';
+import type { ExportService } from './services/exports.js';
 import type { RecoveryService } from './services/recovery.js';
 import type { SessionActivityRegistry } from './services/session-activity.js';
 import type { SessionOperationLock } from './services/session-operation-lock.js';
@@ -16,6 +17,7 @@ export interface AppOptions {
   chunks?: ChunkIngestionService;
   finalization?: FinalizationService;
   recovery?: RecoveryService;
+  exports?: ExportService;
   activity?: SessionActivityRegistry;
   locks?: SessionOperationLock;
   clientDirectory?: string;
@@ -42,7 +44,7 @@ export function createApp(options: AppOptions) {
     }
     jsonParser(req, res, next);
   });
-  app.use('/api/v1', apiRoutes(options.store, token, options.chunks, options.finalization, options.recovery, options.activity, options.expectedHost, options.locks));
+  app.use('/api/v1', apiRoutes(options.store, token, options.chunks, options.finalization, options.recovery, options.exports, options.activity, options.expectedHost, options.locks));
   if (options.clientDirectory) {
     app.use(express.static(path.resolve(options.clientDirectory), { dotfiles: 'deny', etag: false, lastModified: false, redirect: false }));
   }

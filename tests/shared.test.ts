@@ -4,7 +4,7 @@ import { capabilitiesSchema, responseSchema, success, writeCheckInputSchema } fr
 
 test('API envelope rejects wrong versions and unsupported capability claims', () => {
   const schema = responseSchema(capabilitiesSchema);
-  const response = success({ name: 'Local Creator Recorder', milestone: 'reliability', storage: 'ready', recording: true, export: false });
+  const response = success({ name: 'Local Creator Recorder', milestone: 'reliability', storage: 'ready', recording: true, export: true });
   assert.equal(schema.safeParse(response).success, true);
   assert.equal(schema.safeParse({ ...response, apiVersion: 'v2' }).success, false);
   assert.equal(schema.safeParse({ ...response, data: { ...response.data, recording: false } }).success, false);

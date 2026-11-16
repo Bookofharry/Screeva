@@ -219,6 +219,8 @@ test('SQLite commit failure cannot ACK and restart reconciliation promotes only 
     commitChunk: () => { throw new Error('synthetic SQLite full/commit failure'); },
     beginFinalization: (id, count, at) => store.beginFinalization(id, count, at), completeFinalization: output => store.completeFinalization(output),
     markInterrupted: (id, at) => store.markInterrupted(id, at), markRecoverable: (id, at) => store.markRecoverable(id, at), close: () => undefined,
+    insertExportJob: job => store.insertExportJob(job), updateExportJob: job => store.updateExportJob(job),
+    findExportJob: id => store.findExportJob(id), findExportJobBySession: id => store.findExportJobBySession(id), listExportJobs: () => store.listExportJobs(),
   }) });
   const oldToken = await token(injected.origin);
   const id = await createSession(injected.origin, oldToken);

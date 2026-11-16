@@ -315,6 +315,7 @@ export function AppShell() {
               recoveryAttentionCount={recoverySummary.attentionCount}
               onOpenStudio={() => selectView('studio')}
               onOpenRecovery={() => selectView('recovery')}
+              exportAvailable={capabilities?.export === true}
             />
           )}
         </div>

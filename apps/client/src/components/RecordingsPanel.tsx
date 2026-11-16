@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { RecordingConfiguration, RecordingSession, SessionStatus } from '../../../../packages/shared/src/index.js';
-import { loadSessions } from '../api.js';
+import type { ExportJob, RecordingConfiguration, RecordingSession, SessionStatus } from '../../../../packages/shared/src/index.js';
+import { authorizeExports, cancelExport, loadExport, loadSessionExport, loadSessions, queueExport, retryExport } from '../api.js';
 import { formatBytes } from '../media/recording-engine.js';
 import { Icon } from '../ui/Icon.js';
 import { StatusPill, type StatusTone } from '../ui/StatusPill.js';
@@ -11,6 +11,7 @@ export interface RecordingsPanelProps {
   recoveryAttentionCount?: number | undefined;
   onOpenStudio?: (() => void) | undefined;
   onOpenRecovery?: (() => void) | undefined;
+  exportAvailable?: boolean | undefined;
 }
 
 const layoutLabels: Record<RecordingConfiguration['layout'], string> = {
@@ -57,13 +58,36 @@ function statusTone(status: SessionStatus): StatusTone {
   }
 }
 
-export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0, onOpenStudio, onOpenRecovery }: RecordingsPanelProps) {
+export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0, onOpenStudio, onOpenRecovery, exportAvailable = false }: RecordingsPanelProps) {
   const mounted = useRef(false);
   const [items, setItems] = useState<RecordingSession[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  const [exportJobs, setExportJobs] = useState<Record<string, ExportJob>>({});
+  const exportJobsRef = useRef<Record<string, ExportJob>>({});
+  const exportToken = useRef('');
+
+  async function token(signal?: AbortSignal): Promise<string> {
+    if (exportToken.current) return exportToken.current;
+    exportToken.current = await authorizeExports(signal);
+    return exportToken.current;
+  }
+
+  async function hydrateExports(sessions: readonly RecordingSession[], signal?: AbortSignal): Promise<void> {
+    if (!exportAvailable) return;
+    const authorized = await token(signal);
+    const completed = sessions.filter(item => item.status === 'completed');
+    const results = await Promise.all(completed.map(async item => {
+      try { return await loadSessionExport(item.id, authorized, signal); }
+      catch { return null; }
+    }));
+    if (!signal?.aborted && mounted.current) {
+      const hydrated = Object.fromEntries(results.filter((job): job is ExportJob => job !== null).map(job => [job.sessionId, job]));
+      setExportJobs(current => ({ ...current, ...hydrated }));
+    }
+  }
 
   async function refresh(signal?: AbortSignal): Promise<void> {
     setLoading(true);
@@ -74,6 +98,7 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0
         setItems(page.items);
         setNextCursor(page.nextCursor);
       }
+      await hydrateExports(page.items, signal);
     } catch (reason) {
       if (signal?.aborted) return;
       if (mounted.current) {
@@ -97,6 +122,7 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0
         });
         setNextCursor(page.nextCursor);
       }
+      await hydrateExports(page.items);
     } catch (reason) {
       if (mounted.current) {
         setError(reason instanceof Error ? reason.message : 'Unable to load older sessions.');
@@ -115,6 +141,47 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0
       controller.abort();
     };
   }, [refreshTrigger]);
+
+  useEffect(() => {
+    if (!exportAvailable) return;
+    const controller = new AbortController();
+    const poll = window.setInterval(() => {
+      const active = Object.values(exportJobsRef.current).filter(job => job.status === 'queued' || job.status === 'running');
+      if (!active.length || !exportToken.current) return;
+      for (const job of active) {
+        void loadExport(job.id, exportToken.current, controller.signal).then(next => {
+          if (mounted.current) setExportJobs(current => ({ ...current, [next.sessionId]: next }));
+        }).catch(() => undefined);
+      }
+    }, 750);
+    return () => { controller.abort(); window.clearInterval(poll); };
+  }, [exportAvailable]);
+
+  useEffect(() => { exportJobsRef.current = exportJobs; }, [exportJobs]);
+
+  async function startExport(sessionId: string): Promise<void> {
+    setError('');
+    try {
+      const job = await queueExport(sessionId, await token());
+      if (mounted.current) setExportJobs(current => ({ ...current, [sessionId]: job }));
+    } catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : 'Unable to start MP4 export.'); }
+  }
+
+  async function stopExport(job: ExportJob): Promise<void> {
+    setError('');
+    try {
+      const next = await cancelExport(job.id, await token());
+      if (mounted.current) setExportJobs(current => ({ ...current, [next.sessionId]: next }));
+    } catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : 'Unable to cancel MP4 export.'); }
+  }
+
+  async function restartExport(job: ExportJob): Promise<void> {
+    setError('');
+    try {
+      const next = await retryExport(job.id, await token());
+      if (mounted.current) setExportJobs(current => ({ ...current, [next.sessionId]: next }));
+    } catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : 'Unable to retry MP4 export.'); }
+  }
 
   return (
     <section className="panel recordings-panel" aria-labelledby="recordings-title">
@@ -157,7 +224,7 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0
         </div>
       )}
       <p className="recordings-scope-note">
-        This library is read-only in the current milestone. Playback, file download, MP4 export, and deletion controls are not implemented yet.
+        Completed WebM recordings can be exported to MP4 locally. Preview playback, storage totals, quality presets, and deletion remain later milestones.
       </p>
       {loading && <p className="setup-help" role="status">Loading local sessions…</p>}
       {error && (
@@ -224,7 +291,9 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0
       )}
       {!!items.length && (
         <ul className="session-list" aria-label="Recorded local sessions">
-          {items.map(item => (
+          {items.map(item => {
+            const exportJob = exportJobs[item.id];
+            return (
             <li key={item.id} className="session-card">
               <div className="session-card__header">
                 <div className="session-card__title-group">
@@ -261,6 +330,27 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0
                     {item.output.probe.video.width} × {item.output.probe.video.height}
                     {item.output.probe.audio ? ' · Video + audio' : ' · Video only'}
                   </span>
+                  {exportAvailable && (
+                    <div className="session-card__actions">
+                      {!exportJob && <button className="button-compact" onClick={() => { void startExport(item.id); }}>Export MP4</button>}
+                      {exportJob && (exportJob.status === 'queued' || exportJob.status === 'running') && (
+                        <>
+                          <progress max="100" value={exportJob.progress} aria-label={`MP4 export ${exportJob.progress}%`} />
+                          <span className="setup-help">{exportJob.status === 'queued' ? 'Waiting to export' : `Exporting ${exportJob.progress}%`}</span>
+                          <button className="secondary button-compact" onClick={() => { void stopExport(exportJob); }}>Cancel export</button>
+                        </>
+                      )}
+                      {exportJob && (exportJob.status === 'failed' || exportJob.status === 'cancelled') && (
+                        <>
+                          <span className="error">{exportJob.error ?? 'MP4 export did not complete.'}</span>
+                          <button className="secondary button-compact" onClick={() => { void restartExport(exportJob); }}>Retry export</button>
+                        </>
+                      )}
+                      {exportJob?.status === 'completed' && exportJob.output && (
+                        <span className="setup-help">MP4 ready on this computer · {formatBytes(exportJob.output.byteLength)}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 (item.status === 'interrupted' || item.status === 'recoverable' || (item.status !== 'completed' && item.chunks.committedCount > 0)) && (
@@ -277,7 +367,7 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0
                 )
               )}
             </li>
-          ))}
+          );})}
         </ul>
       )}
       {nextCursor && (

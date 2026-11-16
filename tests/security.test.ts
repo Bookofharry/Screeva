@@ -62,7 +62,7 @@ test('listens only on IPv4 loopback and truthfully reports reliability capabilit
   const parsed = responseSchema(capabilitiesSchema).parse(await response.json());
   assert.ok(parsed.ok);
   assert.equal(parsed.data.recording, true);
-  assert.equal(parsed.data.export, false);
+  assert.equal(parsed.data.export, true);
   assert.equal(response.headers.get('x-powered-by'), null);
   assert.equal(response.headers.get('permissions-policy'), 'camera=(self), microphone=(self), display-capture=(self)');
   const policy = response.headers.get('content-security-policy') ?? '';

@@ -166,6 +166,8 @@ test('restart removes an interrupted media-only publish and recovers a sidecar-p
     beginFinalization: (id, count, at) => store.beginFinalization(id, count, at),
     completeFinalization: () => { throw new Error('synthetic database completion failure'); }, close: () => undefined,
     markInterrupted: (id, at) => store.markInterrupted(id, at), markRecoverable: (id, at) => store.markRecoverable(id, at),
+    insertExportJob: job => store.insertExportJob(job), updateExportJob: job => store.updateExportJob(job),
+    findExportJob: id => store.findExportJob(id), findExportJobBySession: id => store.findExportJobBySession(id), listExportJobs: () => store.listExportJobs(),
   };
   await assert.rejects(createFinalizationService(failingStore, secondData, fakeProbe).finalize(secondId, 2));
   store.close();

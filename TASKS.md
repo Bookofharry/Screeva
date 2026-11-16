@@ -1,6 +1,6 @@
 # TASKS.md — Implementation tracker
 
-> Phase 1, Phase 2 Tasks 1–6, Phase 3 Tasks 1–7, Phase 4 Tasks 1–5 and Phase 5 Task 1 are locally verified on Windows through 2026-11-16. The real browser-generated multi-chunk WebM finalization gate and a real H.264/AAC MP4 export gate passed with hash-verified trusted FFmpeg/FFprobe 9.0.1 binaries. Verification details distinguish deterministic fault injection and real-media probing from physical hardware, power-loss and configured remote-CI acceptance.
+> Phase 1, Phase 2 Tasks 1–6, Phase 3 Tasks 1–7, Phase 4 Tasks 1–5 and Phase 5 Tasks 1–2 are locally verified on Windows through 2026-11-16. The real browser-generated multi-chunk WebM finalization gate and real H.264/AAC MP4 export/download gates passed with hash-verified trusted FFmpeg/FFprobe 9.0.1 binaries. Verification details distinguish deterministic fault injection and real-media probing from physical hardware, power-loss and configured remote-CI acceptance.
 
 ## Phase 1 — Foundation
 - [x] Retain Local Creator Recorder as the working name; choose MIT source license and review declared dependency licenses. Release-name clearance remains open.
@@ -41,7 +41,7 @@
 
 ## Phase 5 — MP4 and library
 - [x] FFmpeg export service and background worker. Implemented as an internal single-concurrency worker; authenticated routes/UI remain Task 2.
-- [ ] Progress reporting, cancellation, retry, and cleanup.
+- [x] Progress reporting, cancellation, retry, and cleanup. Authenticated routes, durable SQLite jobs, restart reconciliation, an integrity-checked streaming file route and recording-card controls are verified.
 - [ ] MP4 quality presets with codec probing.
 - [ ] Library with previews, storage usage and delete confirmation.
 - [ ] Confirm source recording survives all export failures.
@@ -138,6 +138,16 @@
 - Trusted local Gyan FFmpeg/FFprobe 9.0.1 performed a real one-second VP9/Opus WebM conversion. FFprobe independently identified the result as H.264 video plus AAC audio in MP4 with a duration within 0.8–1.3 seconds, and the original WebM SHA-256 was unchanged. The existing actual Chromium-generated multi-chunk WebM finalization/FFprobe test also passed in the same regression run.
 - `npm run check` passed typecheck, lint, **334/334 tests** with **0 skipped**, the real-media gates, and production build. `npm run test:e2e` rebuilt production and passed **45/45 Chromium tests**. These are local software/synthetic-media results; physical devices, Edge, remote CI, abrupt power loss, real disk exhaustion and the two-hour soak remain unverified.
 - Changed files: `apps/server/src/media/ffmpeg.ts`, `apps/server/src/services/exports.ts`, `apps/server/src/server.ts`, `tests/exports.test.ts`, `PRD.md`, `TASKS.md`, `ARCHITECTURE.md`, and `DECISIONS.md`.
+
+### Verified Phase 5 Task 2 — 2026-11-16
+- Added strict shared export-job contracts with opaque UUID identity, `queued`/`running`/`completed`/`failed`/`cancelled` state, integer progress, attempt count, timestamps, safe error text and verified MP4 metadata. SQLite schema v5 adds a one-job-per-session durable ledger with transactional v4 migration; older v1–v3 migrations continue through v5.
+- FFmpeg now emits machine-readable progress through a fixed `-progress pipe:2` argument. Progress is bounded to 0–99 until atomic publication, persisted only when it advances, and reaches 100 only with committed output metadata. An AbortSignal kills the child process for cancellation; timeout, diagnostic, thread and output limits remain enforced.
+- Added authenticated `POST /sessions/:id/exports`, protected job/session status reads, `POST /exports/:id/cancel`, `POST /exports/:id/retry`, and integrity-checked `GET /exports/:id/file`. Mutations retain exact same-origin/write-token protections; protected reads/downloads require the current launch token and same-origin Fetch Metadata. Invalid IDs, lifecycle conflicts, stale tokens and incomplete output receive versioned errors.
+- Cancellation works for queued and running jobs, removes partial temporary/output artifacts, and never removes the finalized WebM or committed chunks. Retry preserves job identity, increments its durable attempt generation and is protected against a late cancelled attempt overwriting the new attempt. Duplicate queue requests are idempotent per session.
+- Startup removes only recognized export temporaries/orphan MP4 output, validates completed MP4 length/SHA-256, marks corrupt completed exports failed, and resumes queued/interrupted running work. Graceful shutdown still drains accepted work. Windows retains the documented file-flush plus atomic-rename limitation for directory durability.
+- The Recordings view authorizes in memory, discovers existing jobs, polls active progress with one cleaned-up timer, and exposes Export/Cancel/Retry plus verified MP4-ready state. Settings reports export availability only when the server has the export service. The server file route streams integrity-checked output, but a bounded browser download UX, quality presets/codec discovery, playback/storage totals and deletion remain Tasks 3–4.
+- `npm run check` passed typecheck, lint, **338/338 tests** with **0 skipped**, real FFmpeg/FFprobe media acceptance and production build. `npm run test:e2e` rebuilt production and passed **45/45 Chromium tests**, including a real durable MediaRecorder session exported by local FFmpeg through the authenticated UI; the streaming file route is covered by API integration. Physical hardware, Edge, remote CI, abrupt power loss, genuine disk exhaustion and the two-hour soak remain unverified.
+- Changed files: `packages/shared/src/index.ts`, `apps/server/src/{app,server}.ts`, `apps/server/src/media/ffmpeg.ts`, `apps/server/src/routes/api.ts`, `apps/server/src/services/{capabilities,exports}.ts`, `apps/server/src/storage/database.ts`, `apps/client/src/api.ts`, `apps/client/src/components/{AppShell,RecordingsPanel,SettingsPanel}.tsx`, `tests/{exports,storage,shared,security,sessions,shell-status,chunk-ingestion,fault-injection,finalization}.test.ts`, `tests/e2e/{foundation,recording}.spec.ts`, `PRD.md`, `TASKS.md`, `ARCHITECTURE.md`, and `DECISIONS.md`.
 
 ### Verified recording-start API fallback regression — 2026-11-16
 - Fixed a false capability path where any non-loopback/static hostname was treated as a connected recording service. That allowed durable Start to request `/api/v1/bootstrap` from a frontend fallback and expose `Unexpected token '<'` when `index.html` was parsed as JSON.

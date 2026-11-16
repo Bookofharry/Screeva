@@ -1,20 +1,21 @@
-import { Router } from 'express';
-import { createSessionInputSchema, failure, finalizeSessionInputSchema, listSessionsQuerySchema, recoveryHeartbeatInputSchema, sessionIdSchema, success, writeCheckInputSchema } from '../../../../packages/shared/src/index.js';
+import { Router, type Response } from 'express';
+import { createSessionInputSchema, exportActionInputSchema, exportJobIdSchema, failure, finalizeSessionInputSchema, listSessionsQuerySchema, recoveryHeartbeatInputSchema, sessionIdSchema, success, writeCheckInputSchema } from '../../../../packages/shared/src/index.js';
 import { authenticatedRead, bootstrapOnly } from '../security.js';
 import { getCapabilities } from '../services/capabilities.js';
 import { ChunkIngestionError, parseChunkUploadDeclaration, type ChunkIngestionService } from '../services/chunks.js';
 import { createSession, getSession, listSessions } from '../services/sessions.js';
 import { FinalizationError, type FinalizationService } from '../services/finalization.js';
+import { ExportError, type ExportService } from '../services/exports.js';
 import { RecoveryError, type RecoveryService } from '../services/recovery.js';
 import type { SessionActivityRegistry } from '../services/session-activity.js';
 import type { SessionOperationLock } from '../services/session-operation-lock.js';
 import type { MetadataStore } from '../storage/database.js';
 
 export function apiRoutes(store: MetadataStore, token: string, chunks?: ChunkIngestionService, finalization?: FinalizationService,
-  recovery?: RecoveryService, activity?: SessionActivityRegistry, expectedHost: () => string = () => '', locks?: SessionOperationLock): Router {
+  recovery?: RecoveryService, exports?: ExportService, activity?: SessionActivityRegistry, expectedHost: () => string = () => '', locks?: SessionOperationLock): Router {
   const router = Router();
   router.get('/capabilities', (_req, res) => {
-    res.json(success(getCapabilities(store)));
+    res.json(success(getCapabilities(store, Boolean(exports))));
   });
   router.get('/bootstrap', bootstrapOnly, (_req, res) => {
     res.json(success({ writeToken: token }));
@@ -127,6 +128,64 @@ export function apiRoutes(store: MetadataStore, token: string, chunks?: ChunkIng
     }
     res.json(success(session));
   });
+  if (exports) {
+    const exportRead = authenticatedRead(expectedHost, token);
+    const exportFailure = (error: unknown, res: Response) => {
+      if (!(error instanceof ExportError)) return false;
+      res.status(error.status).json(failure(error.code, error.publicMessage));
+      return true;
+    };
+    router.post('/sessions/:id/exports', (req, res, next) => {
+      if (!req.is('application/json')) { res.status(415).json(failure('UNSUPPORTED_MEDIA_TYPE', 'Use application/json.')); return; }
+      const id = sessionIdSchema.safeParse(req.params.id);
+      if (!id.success || !exportActionInputSchema.safeParse(req.body).success) {
+        res.status(400).json(failure('INVALID_REQUEST', 'Expected a valid session ID and empty JSON object.')); return;
+      }
+      try { res.status(202).json(success(exports.enqueue(id.data))); }
+      catch (error) { if (!exportFailure(error, res)) next(error); }
+    });
+    router.get('/exports/:id', exportRead, (req, res) => {
+      const id = exportJobIdSchema.safeParse(req.params.id);
+      if (!id.success) { res.status(400).json(failure('INVALID_REQUEST', 'Invalid export job ID.')); return; }
+      const job = exports.getJob(id.data);
+      if (!job) { res.status(404).json(failure('NOT_FOUND', 'Export job not found.')); return; }
+      res.json(success(job));
+    });
+    router.get('/sessions/:id/export', exportRead, (req, res) => {
+      const id = sessionIdSchema.safeParse(req.params.id);
+      if (!id.success) { res.status(400).json(failure('INVALID_REQUEST', 'Invalid session ID.')); return; }
+      const job = store.findExportJobBySession(id.data);
+      if (!job) { res.status(404).json(failure('NOT_FOUND', 'Export job not found.')); return; }
+      res.json(success(job));
+    });
+    router.post('/exports/:id/cancel', (req, res, next) => {
+      const id = exportJobIdSchema.safeParse(req.params.id);
+      if (!req.is('application/json')) { res.status(415).json(failure('UNSUPPORTED_MEDIA_TYPE', 'Use application/json.')); return; }
+      if (!id.success || !exportActionInputSchema.safeParse(req.body).success) {
+        res.status(400).json(failure('INVALID_REQUEST', 'Expected a valid export job ID and empty JSON object.')); return;
+      }
+      try { res.json(success(exports.cancel(id.data))); }
+      catch (error) { if (!exportFailure(error, res)) next(error); }
+    });
+    router.post('/exports/:id/retry', async (req, res, next) => {
+      const id = exportJobIdSchema.safeParse(req.params.id);
+      if (!req.is('application/json')) { res.status(415).json(failure('UNSUPPORTED_MEDIA_TYPE', 'Use application/json.')); return; }
+      if (!id.success || !exportActionInputSchema.safeParse(req.body).success) {
+        res.status(400).json(failure('INVALID_REQUEST', 'Expected a valid export job ID and empty JSON object.')); return;
+      }
+      try { res.status(202).json(success(await exports.retry(id.data))); }
+      catch (error) { if (!exportFailure(error, res)) next(error); }
+    });
+    router.get('/exports/:id/file', exportRead, async (req, res, next) => {
+      const id = exportJobIdSchema.safeParse(req.params.id);
+      if (!id.success) { res.status(400).json(failure('INVALID_REQUEST', 'Invalid export job ID.')); return; }
+      try {
+        const file = await exports.getOutput(id.data);
+        res.set({ 'Content-Type': 'video/mp4', 'Content-Length': String(file.byteLength), 'Content-Disposition': `attachment; filename="${file.fileName}"` });
+        res.sendFile(file.path, error => { if (error) next(error); });
+      } catch (error) { if (!exportFailure(error, res)) next(error); }
+    });
+  }
   if (finalization) {
     router.post('/sessions/:id/finalize', async (req, res, next) => {
       if (!req.is('application/json')) {

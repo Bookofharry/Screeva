@@ -30,7 +30,7 @@ const readyCapabilities: Capabilities = {
   milestone: 'reliability',
   storage: 'ready',
   recording: true,
-  export: false,
+  export: true,
 };
 
 test('parses and formats URL hashes for all studio views', () => {
@@ -244,15 +244,15 @@ test('derives temporary recorder and failure states and renders truthful Setting
   }));
   assert.match(settingsMarkup, /Your local workspace/);
   assert.match(settingsMarkup, /Ready · SQLite/);
-  assert.match(settingsMarkup, /Not implemented/);
+  assert.match(settingsMarkup, /Ready · Local FFmpeg/);
   assert.match(settingsMarkup, /Local-only security &amp; storage boundaries/);
 
   const recordingsMarkup = renderToStaticMarkup(createElement(RecordingsPanel, {}));
   assert.match(recordingsMarkup, /Your local sessions/);
   assert.match(recordingsMarkup, /Durable sessions stored by the local service/);
   assert.match(recordingsMarkup, /Loading local sessions…/);
-  assert.match(recordingsMarkup, /library is read-only/i);
-  assert.match(recordingsMarkup, /Playback, file download, MP4 export, and deletion controls are not implemented yet/);
+  assert.match(recordingsMarkup, /exported to MP4 locally/i);
+  assert.match(recordingsMarkup, /Preview playback, storage totals, quality presets, and deletion remain later milestones/);
   assert.doesNotMatch(recordingsMarkup, />Delete</);
   assert.doesNotMatch(recordingsMarkup, />Export MP4</);
 

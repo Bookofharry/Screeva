@@ -31,12 +31,13 @@ export async function startServer(options: ServerOptions) {
     await chunks.reconcile();
     await finalization.reconcile();
     await recovery.reconcile();
+    await exportService.reconcile();
   } catch (error) {
     store.close();
     throw error;
   }
   let host = '';
-  const app = createApp({ store, chunks, finalization, recovery, activity, locks, expectedHost: () => host, ...(options.clientDirectory ? { clientDirectory: options.clientDirectory } : {}) });
+  const app = createApp({ store, chunks, finalization, recovery, exports: exportService, activity, locks, expectedHost: () => host, ...(options.clientDirectory ? { clientDirectory: options.clientDirectory } : {}) });
   const server = createServer({ requestTimeout: 15_000, headersTimeout: 10_000, maxHeaderSize: 8192 }, app);
   server.maxRequestsPerSocket = 1000;
   try {

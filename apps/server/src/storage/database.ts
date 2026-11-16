@@ -4,10 +4,12 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   committedRecordingChunkSchema,
   finalizedRecordingSchema,
+  exportJobSchema,
   recordingConfigurationSchema,
   recordingSessionSchema,
   type CommittedRecordingChunk,
   type FinalizedRecording,
+  type ExportJob,
   type RecordingSession,
   type SessionList,
 } from '../../../../packages/shared/src/index.js';
@@ -26,10 +28,15 @@ export interface MetadataStore {
   completeFinalization(output: FinalizedRecording): RecordingSession;
   markInterrupted(sessionId: string, updatedAt: string): RecordingSession;
   markRecoverable(sessionId: string, updatedAt: string): RecordingSession;
+  insertExportJob(job: ExportJob): void;
+  updateExportJob(job: ExportJob): void;
+  findExportJob(id: string): ExportJob | null;
+  findExportJobBySession(sessionId: string): ExportJob | null;
+  listExportJobs(): ExportJob[];
   close(): void;
 }
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const migratedConfiguration = recordingConfigurationSchema.parse({
   layout: 'pip', resolution: '720p', fps: 30,
   videoBitsPerSecond: 2_000_000, audioBitsPerSecond: 96_000, audioMode: 'combined',
@@ -81,6 +88,14 @@ const createChunksTable = `
   ) STRICT;
 `;
 
+const createExportsTable = `
+  CREATE TABLE export_jobs (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT NOT NULL UNIQUE REFERENCES sessions(id) ON DELETE RESTRICT,
+    job_json TEXT NOT NULL
+  ) STRICT;
+`;
+
 interface SessionRow {
   id: unknown; title: unknown; status: unknown; created_at: unknown; updated_at: unknown;
   configuration_json: unknown; committed_chunk_count: unknown; committed_bytes: unknown; next_chunk_sequence: unknown;
@@ -125,6 +140,11 @@ function mapChunk(row: ChunkRow): CommittedRecordingChunk {
   });
 }
 
+function mapExport(row: { job_json: unknown }): ExportJob {
+  if (typeof row.job_json !== 'string') throw new Error('Invalid stored export job.');
+  return exportJobSchema.parse(JSON.parse(row.job_json) as unknown);
+}
+
 async function rejectUnsafeFile(file: string): Promise<void> {
   try {
     const stat = await lstat(file);
@@ -146,7 +166,7 @@ export async function openMetadata(root: string): Promise<MetadataStore> {
     db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
     let currentVersion = version;
     if (currentVersion === 0) {
-      db.exec(`BEGIN IMMEDIATE; ${createSessionsTable} ${createTransitionTrigger} ${createChunksTable}
+      db.exec(`BEGIN IMMEDIATE; ${createSessionsTable} ${createTransitionTrigger} ${createChunksTable} ${createExportsTable}
         ALTER TABLE sessions ADD COLUMN expected_chunk_count INTEGER CHECK (expected_chunk_count IS NULL OR expected_chunk_count > 0);
         ALTER TABLE sessions ADD COLUMN finalization_json TEXT;
         PRAGMA user_version = ${SCHEMA_VERSION}; COMMIT;`);
@@ -191,7 +211,11 @@ export async function openMetadata(root: string): Promise<MetadataStore> {
       db.exec(`BEGIN IMMEDIATE;
         ALTER TABLE sessions ADD COLUMN expected_chunk_count INTEGER CHECK (expected_chunk_count IS NULL OR expected_chunk_count > 0);
         ALTER TABLE sessions ADD COLUMN finalization_json TEXT;
-        PRAGMA user_version = ${SCHEMA_VERSION}; COMMIT;`);
+        PRAGMA user_version = 4; COMMIT;`);
+      currentVersion = 4;
+    }
+    if (currentVersion === 4) {
+      db.exec(`BEGIN IMMEDIATE; ${createExportsTable} PRAGMA user_version = ${SCHEMA_VERSION}; COMMIT;`);
       currentVersion = SCHEMA_VERSION;
     }
     // Fail startup for a versioned but incomplete/corrupt schema.
@@ -199,6 +223,7 @@ export async function openMetadata(root: string): Promise<MetadataStore> {
       committed_chunk_count, committed_bytes, next_chunk_sequence, expected_chunk_count, finalization_json FROM sessions LIMIT 0`).all();
     db.prepare(`SELECT session_id, sequence, byte_length, sha256, client_timestamp, mime_type, committed_at
       FROM recording_chunks LIMIT 0`).all();
+    db.prepare('SELECT id, session_id, job_json FROM export_jobs LIMIT 0').all();
   } catch (error) {
     db.close();
     throw error;
@@ -231,6 +256,11 @@ export async function openMetadata(root: string): Promise<MetadataStore> {
     WHERE id = ? AND status = ? AND committed_chunk_count = ? AND next_chunk_sequence = ?`);
   const setCompleted = db.prepare(`UPDATE sessions SET status = 'completed', finalization_json = ?, updated_at = ?
     WHERE id = ? AND status = 'finalizing' AND expected_chunk_count = ?`);
+  const insertExport = db.prepare('INSERT INTO export_jobs (id, session_id, job_json) VALUES (?, ?, ?)');
+  const updateExport = db.prepare('UPDATE export_jobs SET job_json = ? WHERE id = ? AND session_id = ?');
+  const findExport = db.prepare('SELECT job_json FROM export_jobs WHERE id = ?');
+  const findExportBySession = db.prepare('SELECT job_json FROM export_jobs WHERE session_id = ?');
+  const listExports = db.prepare('SELECT job_json FROM export_jobs ORDER BY id');
   return {
     isReady: () => db.prepare('SELECT 1 AS ready').get()?.ready === 1,
     insertSession: session => {
@@ -394,6 +424,23 @@ export async function openMetadata(root: string): Promise<MetadataStore> {
         throw error;
       }
     },
+    insertExportJob: job => {
+      const parsed = exportJobSchema.parse(job);
+      insertExport.run(parsed.id, parsed.sessionId, JSON.stringify(parsed));
+    },
+    updateExportJob: job => {
+      const parsed = exportJobSchema.parse(job);
+      if (updateExport.run(JSON.stringify(parsed), parsed.id, parsed.sessionId).changes !== 1) throw new Error('Export job not found.');
+    },
+    findExportJob: id => {
+      const row = findExport.get(id) as { job_json: unknown } | undefined;
+      return row ? mapExport(row) : null;
+    },
+    findExportJobBySession: sessionId => {
+      const row = findExportBySession.get(sessionId) as { job_json: unknown } | undefined;
+      return row ? mapExport(row) : null;
+    },
+    listExportJobs: () => (listExports.all() as unknown as Array<{ job_json: unknown }>).map(mapExport),
     close: () => db.close(),
   };
 }

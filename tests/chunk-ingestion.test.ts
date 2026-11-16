@@ -276,6 +276,9 @@ test('restart reconciles flushed files after a database failure and rotates auth
     completeFinalization: output => store.completeFinalization(output),
     markInterrupted: (sessionId, updatedAt) => store.markInterrupted(sessionId, updatedAt),
     markRecoverable: (sessionId, updatedAt) => store.markRecoverable(sessionId, updatedAt),
+    insertExportJob: job => store.insertExportJob(job), updateExportJob: job => store.updateExportJob(job),
+    findExportJob: id => store.findExportJob(id), findExportJobBySession: id => store.findExportJobBySession(id),
+    listExportJobs: () => store.listExportJobs(),
     close: () => undefined,
   }));
   const oldToken = await tokenFor(failing.origin);

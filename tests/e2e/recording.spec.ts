@@ -237,6 +237,11 @@ test('durable mode creates a session, delivers multiple real MediaRecorder chunk
   expect(await page.evaluate(() => window.recordingTest.blobs.length)).toBe(0);
   expect(await page.evaluate(() => window.recordingTest.states().every(state => state === 'live'))).toBe(true);
   await page.getByRole('button', { name: 'Stop all capture' }).click();
+  await page.getByRole('button', { name: /^Recordings/ }).click();
+  const card = page.locator('.session-card').filter({ hasText: 'Durable browser fixture' }).first();
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Export MP4' }).click();
+  await expect(card.getByText(/MP4 ready on this computer/)).toBeVisible({ timeout: 30_000 });
 });
 
 test('UX-3 defaults to durable, supports a skippable countdown, guards unsafe unload, and restores title after validated save', async ({ page }) => {

@@ -5,7 +5,13 @@ const MAX_FFMPEG_ERROR_BYTES = 1024 * 1024;
 const EXPORT_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 
 export interface FFmpegAdapter {
-  transcodeWebmToMp4(input: string, output: string, maximumOutputBytes: number): Promise<void>;
+  transcodeWebmToMp4(input: string, output: string, maximumOutputBytes: number, options?: FFmpegRunOptions): Promise<void>;
+}
+
+export interface FFmpegRunOptions {
+  durationMs?: number;
+  onProgress?(percent: number): void;
+  signal?: AbortSignal;
 }
 
 export interface FFmpegProcessResult {
@@ -17,9 +23,12 @@ export type FFmpegProcessRunner = (
   executable: string,
   args: readonly string[],
   timeoutMs: number,
+  signal?: AbortSignal,
+  onTime?: (processedMs: number) => void,
 ) => Promise<FFmpegProcessResult>;
 
-export const runFFmpegProcess: FFmpegProcessRunner = (executable, args, timeoutMs) => new Promise((resolve, reject) => {
+export const runFFmpegProcess: FFmpegProcessRunner = (executable, args, timeoutMs, signal, onTime) => new Promise((resolve, reject) => {
+  if (signal?.aborted) { reject(new DOMException('Export cancelled.', 'AbortError')); return; }
   const child = spawn(executable, [...args], {
     shell: false,
     windowsHide: true,
@@ -27,11 +36,22 @@ export const runFFmpegProcess: FFmpegProcessRunner = (executable, args, timeoutM
   });
   const stderr: Buffer[] = [];
   let errorBytes = 0;
+  let progressBuffer = '';
   let settled = false;
+  const timer = setTimeout(() => {
+    child.kill();
+    finish(new Error('FFmpeg export timed out.'));
+  }, timeoutMs);
+  timer.unref();
+  const onAbort = () => {
+    child.kill();
+    finish(new DOMException('Export cancelled.', 'AbortError'));
+  };
   const finish = (error?: Error, result?: FFmpegProcessResult) => {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
     if (error) reject(error);
     else if (result) resolve(result);
   };
@@ -43,17 +63,20 @@ export const runFFmpegProcess: FFmpegProcessRunner = (executable, args, timeoutM
       return;
     }
     stderr.push(value);
+    progressBuffer += value.toString('utf8');
+    const lines = progressBuffer.split(/\r?\n/);
+    progressBuffer = lines.pop() ?? '';
+    for (const line of lines) {
+      const match = /^out_time_us=(\d+)$/.exec(line);
+      if (match?.[1]) onTime?.(Number(match[1]) / 1000);
+    }
   });
   child.once('error', error => finish(error));
   child.once('close', exitCode => finish(undefined, {
     exitCode,
     stderr: Buffer.concat(stderr).toString('utf8'),
   }));
-  const timer = setTimeout(() => {
-    child.kill();
-    finish(new Error('FFmpeg export timed out.'));
-  }, timeoutMs);
-  timer.unref();
+  signal?.addEventListener('abort', onAbort, { once: true });
 });
 
 export function createFFmpegAdapter(
@@ -65,7 +88,7 @@ export function createFFmpegAdapter(
   }
   if (configuredExecutable.includes('\0')) throw new Error('Invalid FFmpeg executable path.');
   return {
-    async transcodeWebmToMp4(input, output, maximumOutputBytes) {
+    async transcodeWebmToMp4(input, output, maximumOutputBytes, options = {}) {
       const absoluteInput = path.resolve(input);
       const absoluteOutput = path.resolve(output);
       if (absoluteInput === absoluteOutput) throw new Error('FFmpeg input and output must differ.');
@@ -73,7 +96,9 @@ export function createFFmpegAdapter(
       const result = await runner(configuredExecutable, [
         '-nostdin',
         '-hide_banner',
+        '-nostats',
         '-loglevel', 'error',
+        '-progress', 'pipe:2',
         '-n',
         '-i', absoluteInput,
         '-map', '0:v:0',
@@ -93,7 +118,10 @@ export function createFFmpegAdapter(
         '-movflags', '+faststart',
         '-f', 'mp4',
         absoluteOutput,
-      ], EXPORT_TIMEOUT_MS);
+      ], EXPORT_TIMEOUT_MS, options.signal, processedMs => {
+        if (!options.onProgress || !options.durationMs || options.durationMs <= 0) return;
+        options.onProgress(Math.max(0, Math.min(99, Math.floor(processedMs / options.durationMs * 100))));
+      });
       if (result.exitCode !== 0) throw new Error('FFmpeg could not export the recording.');
     },
   };

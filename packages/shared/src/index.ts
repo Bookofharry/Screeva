@@ -11,7 +11,7 @@ export const capabilitiesSchema = z.strictObject({
   milestone: z.literal('reliability'),
   storage: z.literal('ready'),
   recording: z.literal(true),
-  export: z.literal(false),
+  export: z.boolean(),
 });
 export type Capabilities = z.infer<typeof capabilitiesSchema>;
 export const bootstrapSchema = z.strictObject({ writeToken: writeTokenSchema });
@@ -115,6 +115,30 @@ export const durableChunkAckSchema = z.strictObject({
   committedAt: isoTimestampSchema,
 });
 export type DurableChunkAck = z.infer<typeof durableChunkAckSchema>;
+
+export const exportJobIdSchema = sessionIdSchema;
+export const exportJobStatusSchema = z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']);
+export const exportJobOutputSchema = z.strictObject({
+  fileName: z.literal('recording.mp4'),
+  mimeType: z.literal('video/mp4'),
+  byteLength: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  sha256: sha256Schema,
+  completedAt: isoTimestampSchema,
+});
+export const exportJobSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  id: exportJobIdSchema,
+  sessionId: sessionIdSchema,
+  status: exportJobStatusSchema,
+  progress: z.number().int().min(0).max(100),
+  attempts: z.number().int().positive().max(100),
+  createdAt: isoTimestampSchema,
+  updatedAt: isoTimestampSchema,
+  output: exportJobOutputSchema.nullable(),
+  error: z.string().min(1).max(300).nullable(),
+});
+export type ExportJob = z.infer<typeof exportJobSchema>;
+export const exportActionInputSchema = z.strictObject({});
 
 export const recoveryConditionSchema = z.enum(['empty', 'active', 'valid-incomplete', 'corrupt', 'finalizing', 'completed', 'unavailable']);
 export const recoveryInspectionSchema = z.strictObject({

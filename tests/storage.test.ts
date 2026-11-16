@@ -31,7 +31,7 @@ test('initializes real local directories and schema; reopening preserves existin
   first.close();
   assert.deepEqual((await readdir(data)).sort(), ['exports', 'logs', 'recorder.sqlite', 'sessions']);
   const db = new DatabaseSync(path.join(data, 'recorder.sqlite'));
-  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 4);
+  assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 5);
   db.close();
   const sessionPath = await sessionDirectory(data, id);
   await mkdir(sessionPath);
@@ -70,7 +70,7 @@ test('migrates schema v1 transactionally and preserves legacy sessions with safe
   assert.deepEqual(migrated.chunks, { committedCount: 0, committedBytes: 0, nextSequence: 0 });
   store.close();
   const reopened = new DatabaseSync(databasePath);
-  assert.equal(reopened.prepare('PRAGMA user_version').get()?.user_version, 4);
+  assert.equal(reopened.prepare('PRAGMA user_version').get()?.user_version, 5);
   assert.equal(reopened.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'sessions_v1'").get()?.count, 0);
   reopened.close();
 }));
@@ -103,7 +103,7 @@ test('migrates schema v2 by adding an empty chunk ledger without changing sessio
   assert.deepEqual(store.listChunks(), []);
   store.close();
   const reopened = new DatabaseSync(databasePath);
-  assert.equal(reopened.prepare('PRAGMA user_version').get()?.user_version, 4);
+  assert.equal(reopened.prepare('PRAGMA user_version').get()?.user_version, 5);
   assert.equal(reopened.prepare('SELECT count(*) AS count FROM recording_chunks').get()?.count, 0);
   reopened.close();
 }));
@@ -135,10 +135,26 @@ test('migrates schema v3 by adding nullable finalization metadata without changi
   assert.equal(store.findSession(id)?.output, null);
   store.close();
   const reopened = new DatabaseSync(databasePath);
-  assert.equal(reopened.prepare('PRAGMA user_version').get()?.user_version, 4);
+  assert.equal(reopened.prepare('PRAGMA user_version').get()?.user_version, 5);
   const migrated = reopened.prepare('SELECT expected_chunk_count, finalization_json FROM sessions WHERE id = ?').get(id);
   assert.equal(migrated?.expected_chunk_count, null);
   assert.equal(migrated?.finalization_json, null);
+  reopened.close();
+}));
+
+test('migrates schema v4 by adding an empty durable export ledger', () => fixture(async (_root, data) => {
+  const initialized = await openMetadata(data);
+  initialized.close();
+  const databasePath = path.join(data, 'recorder.sqlite');
+  const legacy = new DatabaseSync(databasePath);
+  legacy.exec('DROP TABLE export_jobs; PRAGMA user_version = 4;');
+  legacy.close();
+  const migrated = await openMetadata(data);
+  assert.deepEqual(migrated.listExportJobs(), []);
+  migrated.close();
+  const reopened = new DatabaseSync(databasePath);
+  assert.equal(reopened.prepare('PRAGMA user_version').get()?.user_version, 5);
+  assert.equal(reopened.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'export_jobs'").get()?.count, 1);
   reopened.close();
 }));
 

@@ -162,6 +162,11 @@ test('database failures return a generic versioned error without leaking details
     completeFinalization: () => { throw new Error('private database path and SQL detail'); },
     markInterrupted: () => { throw new Error('private database path and SQL detail'); },
     markRecoverable: () => { throw new Error('private database path and SQL detail'); },
+    insertExportJob: () => { throw new Error('private database path and SQL detail'); },
+    updateExportJob: () => { throw new Error('private database path and SQL detail'); },
+    findExportJob: () => { throw new Error('private database path and SQL detail'); },
+    findExportJobBySession: () => { throw new Error('private database path and SQL detail'); },
+    listExportJobs: () => { throw new Error('private database path and SQL detail'); },
     close: () => undefined,
   };
   let host = '';

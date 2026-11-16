@@ -32,7 +32,7 @@ test('foundation status and authenticated check work without external requests o
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('Ready · SQLite')).toBeVisible();
-  await expect(page.getByText('Not implemented', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ready · Local FFmpeg', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Check local access' }).click();
   await expect(page.getByRole('status', { name: 'Local access check' })).toContainText('Local access verified');
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);

@@ -2,9 +2,11 @@ import { z } from 'zod';
 import {
   bootstrapSchema,
   capabilitiesSchema,
+  exportJobSchema,
   responseSchema,
   sessionListSchema,
   type SessionList,
+  type ExportJob,
   writeCheckSchema,
 } from '../../../packages/shared/src/index.js';
 import { readJsonResponse } from './api-response.js';
@@ -41,6 +43,48 @@ export function loadSessions(options: LoadSessionsOptions = {}): Promise<Session
   const query = params.toString();
   const url = query ? `/api/v1/sessions?${query}` : '/api/v1/sessions';
   return request(url, sessionListSchema, options.signal ? { signal: options.signal } : {});
+}
+
+export async function authorizeExports(signal?: AbortSignal): Promise<string> {
+  const result = await request('/api/v1/bootstrap', bootstrapSchema, {
+    headers: { 'X-Recorder-Bootstrap': '1' },
+    ...(signal ? { signal } : {}),
+  });
+  return result.writeToken;
+}
+
+function exportHeaders(token: string) {
+  return { 'Content-Type': 'application/json', 'X-Recorder-Token': token };
+}
+
+export function queueExport(sessionId: string, token: string, signal?: AbortSignal): Promise<ExportJob> {
+  return request(`/api/v1/sessions/${encodeURIComponent(sessionId)}/exports`, exportJobSchema, {
+    method: 'POST', headers: exportHeaders(token), body: '{}', ...(signal ? { signal } : {}),
+  });
+}
+
+export function loadSessionExport(sessionId: string, token: string, signal?: AbortSignal): Promise<ExportJob> {
+  return request(`/api/v1/sessions/${encodeURIComponent(sessionId)}/export`, exportJobSchema, {
+    headers: { 'X-Recorder-Token': token }, ...(signal ? { signal } : {}),
+  });
+}
+
+export function loadExport(jobId: string, token: string, signal?: AbortSignal): Promise<ExportJob> {
+  return request(`/api/v1/exports/${encodeURIComponent(jobId)}`, exportJobSchema, {
+    headers: { 'X-Recorder-Token': token }, ...(signal ? { signal } : {}),
+  });
+}
+
+export function cancelExport(jobId: string, token: string, signal?: AbortSignal): Promise<ExportJob> {
+  return request(`/api/v1/exports/${encodeURIComponent(jobId)}/cancel`, exportJobSchema, {
+    method: 'POST', headers: exportHeaders(token), body: '{}', ...(signal ? { signal } : {}),
+  });
+}
+
+export function retryExport(jobId: string, token: string, signal?: AbortSignal): Promise<ExportJob> {
+  return request(`/api/v1/exports/${encodeURIComponent(jobId)}/retry`, exportJobSchema, {
+    method: 'POST', headers: exportHeaders(token), body: '{}', ...(signal ? { signal } : {}),
+  });
 }
 
 export async function checkWriteAccess() {

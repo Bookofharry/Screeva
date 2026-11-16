@@ -38,7 +38,7 @@ export function SettingsPanel({
         </div>
         <div className="workspace-metric">
           <dt>MP4 export</dt>
-          <dd className="muted">Not implemented</dd>
+          <dd className={capabilities?.export ? undefined : 'muted'}>{capabilities?.export ? 'Ready · Local FFmpeg' : 'Not verified'}</dd>
         </div>
       </dl>
       {error && <p role="alert" className="error">{error}</p>}

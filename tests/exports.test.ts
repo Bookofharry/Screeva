@@ -9,6 +9,8 @@ import { test } from 'node:test';
 import { createFFmpegAdapter, type FFmpegAdapter, type FFmpegProcessRunner } from '../apps/server/src/media/ffmpeg.js';
 import { createExportService } from '../apps/server/src/services/exports.js';
 import { openMetadata, type MetadataStore } from '../apps/server/src/storage/database.js';
+import { startServer } from '../apps/server/src/server.js';
+import { exportJobSchema, responseSchema } from '../packages/shared/src/index.js';
 
 const configuration = {
   layout: 'screen' as const,
@@ -64,7 +66,7 @@ async function completedSession(data: string, bytes: Uint8Array): Promise<{ stor
     committedAt: '2026-11-16T10:00:02.000Z',
   });
   store.beginFinalization(id, 1, '2026-11-16T10:00:03.000Z');
-  store.completeFinalization({
+  const finalized = {
     schemaVersion: 1,
     sessionId: id,
     expectedChunkCount: 1,
@@ -78,33 +80,39 @@ async function completedSession(data: string, bytes: Uint8Array): Promise<{ stor
       video: { codec: 'vp9', width: 320, height: 180 },
       audio: { codec: 'opus' },
     },
-  });
+  } as const;
+  store.completeFinalization(finalized);
   const final = path.join(data, 'sessions', id, 'final');
   await mkdir(final, { recursive: true });
   const source = path.join(final, 'recording.webm');
   await writeFile(source, bytes);
+  await writeFile(path.join(final, 'recording.commit.json'), JSON.stringify(finalized));
   return { store, id, source };
 }
 
 test('FFmpeg adapter uses a fixed non-shell argument vector and rejects unsafe configuration', async () => {
   let invocation: { executable: string; args: readonly string[]; timeoutMs: number } | undefined;
-  const runner: FFmpegProcessRunner = async (executable, args, timeoutMs) => {
+  let reportedProgress = 0;
+  const runner: FFmpegProcessRunner = async (executable, args, timeoutMs, _signal, onTime) => {
     invocation = { executable, args, timeoutMs };
+    onTime?.(500);
     return { exitCode: 0, stderr: '' };
   };
   const executable = path.resolve('trusted-ffmpeg.exe');
   const adapter = createFFmpegAdapter(executable, runner);
   const input = path.resolve('recording with spaces.webm');
   const output = path.resolve('recording.mp4');
-  await adapter.transcodeWebmToMp4(input, output, 100_000_000);
+  await adapter.transcodeWebmToMp4(input, output, 100_000_000, { durationMs: 1000, onProgress: value => { reportedProgress = value; } });
   assert.equal(invocation?.executable, executable);
-  assert.deepEqual(invocation?.args.slice(0, 7), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-n', '-i', input]);
+  assert.deepEqual(invocation?.args.slice(0, 7), ['-nostdin', '-hide_banner', '-nostats', '-loglevel', 'error', '-progress', 'pipe:2']);
+  assert.deepEqual(invocation?.args.slice(invocation.args.indexOf('-i'), invocation.args.indexOf('-i') + 2), ['-i', input]);
   assert.ok(invocation?.args.includes('libx264'));
   assert.ok(invocation?.args.includes('aac'));
   assert.deepEqual(invocation?.args.slice(invocation.args.indexOf('-threads'), invocation.args.indexOf('-threads') + 2), ['-threads', '4']);
   assert.deepEqual(invocation?.args.slice(invocation.args.indexOf('-fs'), invocation.args.indexOf('-fs') + 2), ['-fs', '100000000']);
   assert.equal(invocation?.args.at(-1), output);
   assert.equal(invocation?.timeoutMs, 3 * 60 * 60 * 1000);
+  assert.equal(reportedProgress, 50);
   assert.throws(() => createFFmpegAdapter('relative/ffmpeg'));
   await assert.rejects(adapter.transcodeWebmToMp4(input, input, 100_000_000));
   await assert.rejects(adapter.transcodeWebmToMp4(input, output, 0));
@@ -159,6 +167,7 @@ test('export failures remove temporary output, report failure, and retain the so
   assert.deepEqual(service.getJob(job.id), {
     ...job,
     status: 'failed',
+    progress: 1,
     updatedAt: service.getJob(job.id)?.updatedAt,
     error: 'The MP4 export could not be completed safely.',
   });
@@ -204,6 +213,103 @@ test('export worker runs at most one conversion at a time', () => fixture(async 
   assert.equal(service.getJob(secondJob.id)?.status, 'completed');
   await service.close();
   second.store.close();
+}));
+
+test('running export can be cancelled, cleans partial output, and retries with the same durable job identity', () => fixture(async (_root, data) => {
+  const prepared = await completedSession(data, Buffer.from('cancel source'));
+  let failUntilCancelled = true;
+  const ffmpeg: FFmpegAdapter = {
+    transcodeWebmToMp4: async (_input, output, _limit, options) => {
+      if (!failUntilCancelled) { await writeFile(output, Buffer.from('retry mp4')); return; }
+      await writeFile(output, Buffer.from('partial mp4'));
+      if (options?.signal?.aborted) throw new DOMException('cancelled', 'AbortError');
+      await new Promise<void>((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')), { once: true });
+      });
+    },
+  };
+  const service = createExportService(prepared.store, data, ffmpeg);
+  const job = service.enqueue(prepared.id);
+  await waitFor(() => service.getJob(job.id)?.status === 'running');
+  assert.equal(service.cancel(job.id).status, 'cancelled');
+  failUntilCancelled = false;
+  const retried = await service.retry(job.id);
+  assert.equal(retried.id, job.id);
+  assert.equal(retried.attempts, 2);
+  await service.whenIdle();
+  assert.equal(service.getJob(job.id)?.status, 'completed');
+  assert.deepEqual(await readFile(prepared.source), Buffer.from('cancel source'));
+  await service.close();
+  prepared.store.close();
+}));
+
+test('restart reconciliation removes stale export artifacts and resumes an interrupted durable job', () => fixture(async (_root, data) => {
+  const prepared = await completedSession(data, Buffer.from('restart source'));
+  const timestamp = '2026-11-16T12:00:00.000Z';
+  const id = randomUUID();
+  prepared.store.insertExportJob({
+    schemaVersion: 1, id, sessionId: prepared.id, status: 'running', progress: 47, attempts: 1,
+    createdAt: timestamp, updatedAt: timestamp, output: null, error: null,
+  });
+  const final = path.dirname(prepared.source);
+  await writeFile(path.join(final, `.export-${randomUUID()}.tmp.mp4`), 'stale');
+  await writeFile(path.join(final, 'recording.mp4'), 'orphan');
+  prepared.store.close();
+  const store = await openMetadata(data);
+  const service = createExportService(store, data, {
+    transcodeWebmToMp4: async (_input, output, _limit, options) => {
+      options?.onProgress?.(65);
+      await writeFile(output, Buffer.from('resumed mp4'));
+    },
+  });
+  await service.reconcile();
+  await service.whenIdle();
+  const completed = service.getJob(id);
+  assert.equal(completed?.status, 'completed');
+  assert.equal(completed?.attempts, 2);
+  assert.equal(completed?.progress, 100);
+  assert.deepEqual((await readdir(final)).filter(name => name.startsWith('.export-')), []);
+  assert.deepEqual(await readFile(prepared.source), Buffer.from('restart source'));
+  await service.close();
+  store.close();
+}));
+
+test('authenticated export API queues, reports and downloads only verified completed MP4 output', () => fixture(async (_root, data) => {
+  const prepared = await completedSession(data, Buffer.from('api source'));
+  const sessionId = prepared.id;
+  prepared.store.close();
+  const running = await startServer({
+    port: 0,
+    dataDirectory: data,
+    ffmpeg: { transcodeWebmToMp4: async (_input, output, _limit, options) => {
+      options?.onProgress?.(55);
+      await writeFile(output, Buffer.from('api mp4'));
+    } },
+  });
+  try {
+    const bootstrap = await fetch(`${running.origin}/api/v1/bootstrap`, { headers: { 'Sec-Fetch-Site': 'same-origin', 'X-Recorder-Bootstrap': '1' } });
+    const writeToken = (await bootstrap.json() as { data: { writeToken: string } }).data.writeToken;
+    const writeHeaders = { Origin: running.origin, 'Sec-Fetch-Site': 'same-origin', 'X-Recorder-Token': writeToken, 'Content-Type': 'application/json' };
+    assert.equal((await fetch(`${running.origin}/api/v1/sessions/${sessionId}/exports`, { method: 'POST', headers: { ...writeHeaders, 'X-Recorder-Token': '' }, body: '{}' })).status, 401);
+    const queuedResponse = await fetch(`${running.origin}/api/v1/sessions/${sessionId}/exports`, { method: 'POST', headers: writeHeaders, body: '{}' });
+    assert.equal(queuedResponse.status, 202);
+    const queued = responseSchema(exportJobSchema).parse(await queuedResponse.json());
+    assert.ok(queued.ok);
+    await running.exportService.whenIdle();
+    assert.equal((await fetch(`${running.origin}/api/v1/exports/${queued.data.id}`, { headers: { 'Sec-Fetch-Site': 'same-origin' } })).status, 401);
+    const readHeaders = { 'Sec-Fetch-Site': 'same-origin', 'X-Recorder-Token': writeToken };
+    const statusResponse = await fetch(`${running.origin}/api/v1/exports/${queued.data.id}`, { headers: readHeaders });
+    const status = responseSchema(exportJobSchema).parse(await statusResponse.json());
+    assert.ok(status.ok);
+    assert.equal(status.data.status, 'completed');
+    assert.equal(status.data.progress, 100);
+    const repeated = await fetch(`${running.origin}/api/v1/sessions/${sessionId}/exports`, { method: 'POST', headers: writeHeaders, body: '{}' });
+    assert.equal((await repeated.json() as { data: { id: string } }).data.id, queued.data.id);
+    const download = await fetch(`${running.origin}/api/v1/exports/${queued.data.id}/file`, { headers: readHeaders });
+    assert.equal(download.status, 200);
+    assert.equal(download.headers.get('content-type'), 'video/mp4');
+    assert.deepEqual(Buffer.from(await download.arrayBuffer()), Buffer.from('api mp4'));
+  } finally { await running.close(); }
 }));
 
 const ffmpegExecutable = process.env.FFMPEG_PATH || 'ffmpeg';
