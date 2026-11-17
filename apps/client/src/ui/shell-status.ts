@@ -77,7 +77,7 @@ export interface RecordingStatusSummary {
   durable: DurableRecordingSnapshot;
 }
 
-export type ServiceReadinessState = 'connecting' | 'connected' | 'offline';
+export type ServiceReadinessState = 'connecting' | 'connected' | 'offline' | 'browser';
 export type ShellActivityState =
   | 'idle'
   | 'capturing'
@@ -101,7 +101,7 @@ export interface BackgroundActivityBanner {
 
 export interface GlobalShellStatus {
   serviceState: ServiceReadinessState;
-  serviceLabel: 'Connecting…' | 'Connected' | 'Unavailable';
+  serviceLabel: 'Connecting…' | 'Connected' | 'Unavailable' | 'Web mode';
   serviceTone: StatusTone;
   activityState: ShellActivityState;
   activityLabel: string;
@@ -164,6 +164,7 @@ const TEMPORARY_ACTIVE_STATES = new Set<RecordingSnapshot['status']>([
 ]);
 
 export function deriveGlobalShellStatus(input: {
+  browserMode?: boolean;
   capabilities: Capabilities | null;
   serviceError: string;
   capture: CaptureSummary;
@@ -171,12 +172,12 @@ export function deriveGlobalShellStatus(input: {
   activeView: StudioViewId;
 }): GlobalShellStatus {
   const { capabilities, serviceError, capture, recording, activeView } = input;
-  const serviceState: ServiceReadinessState = serviceError
+  const serviceState: ServiceReadinessState = input.browserMode ? 'browser' : serviceError
     ? 'offline'
     : capabilities
       ? 'connected'
       : 'connecting';
-  const serviceLabel = serviceState === 'offline'
+  const serviceLabel = serviceState === 'browser' ? 'Web mode' : serviceState === 'offline'
     ? 'Unavailable'
     : serviceState === 'connected'
       ? 'Connected'

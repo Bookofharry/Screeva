@@ -105,6 +105,40 @@ async function enableAudioIfNeeded(page: Page) {
   if (await button.isVisible()) await button.click();
 }
 
+test('hosted web mode records and downloads playable WebM without a local API', async ({ page, request }) => {
+  await installRecordingSources(page);
+  const apiRequests: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/')) apiRequests.push(request.url()); });
+  await page.route('https://studio.example/**', async route => {
+    const url = new URL(route.request().url());
+    const response = await request.get(`http://127.0.0.1:4318${url.pathname}`);
+    await route.fulfill({ response });
+  });
+  await page.goto('https://studio.example/');
+  await expect(page.getByRole('status', { name: 'Local service status' })).toHaveText('Web mode');
+  await page.getByRole('button', { name: 'Continue in browser', exact: true }).click();
+  await page.getByRole('button', { name: 'Share screen', exact: true }).click();
+  await page.getByRole('button', { name: 'Start recording', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('● REC');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open local studio', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Continue in browser', exact: true }).click();
+  await page.waitForTimeout(1200);
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Recording status' })).toHaveText('Completed');
+  const preview = page.getByLabel('Recorded WebM preview');
+  await expect.poll(() => preview.evaluate((video: HTMLVideoElement) => video.videoWidth)).toBeGreaterThan(0);
+  await preview.evaluate(async (video: HTMLVideoElement) => { video.muted = true; await video.play(); });
+  await expect.poll(() => preview.evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThan(0.2);
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('link', { name: 'Download WebM' }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toBe('screeva-recording.webm');
+  expect(await download.failure()).toBeNull();
+  expect(apiRequests).toEqual([]);
+  await page.getByRole('button', { name: 'Stop all capture' }).click();
+});
+
 async function chooseTemporaryRecording(page: Page) {
   await page.getByRole('button', { name: 'Recording options' }).click();
   await page.getByRole('radio', { name: 'Temporary browser preview' }).check();

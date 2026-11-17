@@ -28,7 +28,7 @@ export function isStaticBrowserHost(): boolean {
 }
 
 export function localServiceConnectionHelp(): string {
-  const nextStep = 'Start the local Screeva app and open the address it prints (normally http://127.0.0.1:4317) for durable storage and MP4 export. Or use Quick browser test in Studio for short, temporary WebM recordings; download before closing the tab.';
+  const nextStep = 'Start the local Screeva app and open the address it prints (normally http://127.0.0.1:4317) for durable storage and MP4 export. Or use Browser recording in Studio for short, temporary WebM recordings; download before closing the tab.';
   return isStaticBrowserHost()
     ? `This hosted page supports browser-only recording. Its host does not provide the local Screeva API, and Retry connection cannot connect this page to your computer. ${nextStep}`
     : `Cannot reach the local service. Check that the server is running, then retry. ${nextStep}`;

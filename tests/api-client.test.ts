@@ -19,7 +19,7 @@ test('a static browser host rejects local API operations without making network 
   };
   try {
     assert.equal(isStaticBrowserHost(), true);
-    await assert.rejects(loadCapabilities(), /hosted page.*127\.0\.0\.1:4317.*Quick browser test/i);
+    await assert.rejects(loadCapabilities(), /hosted page.*127\.0\.0\.1:4317.*Browser recording/i);
     await assert.rejects(loadSessions(), /hosted page/i);
     await assert.rejects(checkWriteAccess(), /hosted page/i);
     assert.deepEqual(requests, []);

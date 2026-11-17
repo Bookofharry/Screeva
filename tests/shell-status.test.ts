@@ -33,6 +33,16 @@ const readyCapabilities: Capabilities = {
   export: true,
 };
 
+test('web mode is a normal readiness state without claiming a local service', () => {
+  const status = deriveGlobalShellStatus({
+    browserMode: true, capabilities: null, serviceError: '',
+    capture: initialCaptureSummary(), recording: initialRecordingStatusSummary(), activeView: 'studio',
+  });
+  assert.equal(status.serviceState, 'browser');
+  assert.equal(status.serviceLabel, 'Web mode');
+  assert.equal(status.serviceTone, 'neutral');
+});
+
 test('parses and formats URL hashes for all studio views', () => {
   assert.deepEqual(STUDIO_VIEWS.map(view => view.id), ['studio', 'recordings', 'recovery', 'guides', 'settings']);
   assert.equal(parseViewFromHash(''), 'studio');

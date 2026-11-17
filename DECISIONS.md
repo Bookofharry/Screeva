@@ -347,6 +347,19 @@
 
 **Consequences:** Export state and verified output survive clean restart, cancellation/retry races are deterministic, corrupt/missing MP4s fail closed, and the original WebM/chunks remain protected. One job per session makes queue requests idempotent and keeps retry history as an attempt count rather than multiple ambiguous outputs. A cancelled or failed job can be retried up to 100 attempts. Progress may remain low or indeterminate-looking when source duration is unavailable, and Windows still cannot fsync directories through Node. Quality/codec probing is deliberately deferred to Task 3; preview, aggregate storage and deletion remain Task 4.
 
+## ADR-039 — Optional native launch link with independent Web mode
+**Status:** Accepted.
+
+**Date:** 2026-11-17.
+
+**Context:** GitHub Pages can host browser recording but cannot run the local service. Presenting missing local storage as an error confuses website users. A one-click path to durable storage must launch installed software without allowing arbitrary commands or bypassing browser permissions.
+
+**Decision:** Treat hosted use as normal Web mode. Offer explicit download/setup plus `screeva://open`, registered by installed Windows/macOS launchers. Accept only the fixed open action; open the separately served loopback studio after schema-valid readiness, reuse a running service, and bind the port before any storage reconciliation. Keep all existing same-origin/token controls. Preserve portable Windows and Application Support macOS data. Use a visible launcher/Terminal window for shutdown, and retain browser recording if installation or native launch is declined.
+
+**Alternatives:** Make the hosted page call localhost with new CORS permissions; automatically execute a downloaded script; run recordings through GitHub Actions; replace the application with a new desktop framework; infer successful launch from a timer; ship third-party FFmpeg binaries without a distribution review.
+
+**Consequences:** Users can launch installed Screeva from the website without developer commands. Initial download/setup and OS/browser approval remain required. Browser-only clips stay temporary and are not migrated. FFmpeg/FFprobe remain separately installed prerequisites. No runtime dependency was added. macOS native handler compilation/approval and Windows URL registration require platform acceptance in addition to automated tests; bundles remain unsigned/ad-hoc signed rather than notarized.
+
 ## Template for a new decision
 ```md
 ## ADR-XXX — Title

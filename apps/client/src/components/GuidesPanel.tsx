@@ -165,7 +165,7 @@ export function GuidesPanel({ onSelectView }: GuidesPanelProps) {
               <div>
                 <h3>Choose your save mode</h3>
                 <p>
-                  On the docked <strong>Recorder</strong> bar, click the <strong>Recording options</strong> button (<code>Save to computer</code> or <code>Quick browser test</code>) to choose how your recording is stored and give durable sessions a <strong>Recording name</strong>.
+                  On the docked <strong>Recorder</strong> bar, click the <strong>Recording options</strong> button (<code>Save to computer</code> or <code>Browser recording</code>) to choose how your recording is stored and give durable sessions a <strong>Recording name</strong>.
                 </p>
               </div>
             </li>
@@ -275,7 +275,7 @@ export function GuidesPanel({ onSelectView }: GuidesPanelProps) {
             </div>
             <div className="guides-card">
               <div className="guides-card__header">
-                <h3>Quick browser test</h3>
+                <h3>Browser recording</h3>
                 <span className="badge">In-memory preview</span>
               </div>
               <p>

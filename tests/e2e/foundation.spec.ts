@@ -54,7 +54,7 @@ test('HTML API fallback is reported offline without exposing a JSON parser error
   await page.goto('/');
   await expect(page.getByRole('status', { name: 'Local service status' })).toContainText('Unavailable');
   await expect(page.getByRole('alert').filter({ hasText: 'Cannot reach the local service. Check that the server is running, then retry.' }).first()).toBeVisible();
-  await expect(page.locator('.recording-panel')).toContainText('Quick browser test');
+  await expect(page.locator('.recording-panel')).toContainText('Browser recording');
   expect(errors.some(message => message.includes("Unexpected token '<'"))).toBe(false);
 });
 
@@ -78,20 +78,35 @@ test('hosted studio explains browser-only recording without requesting a remote 
   });
   await page.goto('https://studio.example/Screeva/#settings');
   const settings = page.getByRole('region', { name: 'Settings workspace' });
-  await expect(settings.getByRole('alert')).toContainText('This hosted page supports browser-only recording');
-  await expect(settings.getByRole('alert')).toContainText('http://127.0.0.1:4317');
-  await expect(settings.getByText('Temporary WebM only · durable storage unavailable', { exact: true })).toBeVisible();
-  await settings.getByRole('button', { name: 'Retry connection' }).click();
-  await expect(settings.getByRole('alert')).toContainText('Retry connection cannot connect this page to your computer');
+  await expect(page.getByRole('status', { name: 'Local service status' })).toHaveText('Web mode');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retry connection' })).toHaveCount(0);
+  await expect(settings).toContainText('128 MiB');
+  const launch = settings.getByRole('link', { name: 'Open local studio', exact: true });
+  await expect(launch).toHaveAttribute('href', 'screeva://open');
+  await expect(settings.getByRole('link', { name: 'Get Screeva for Windows or macOS' })).toHaveAttribute('href', 'https://github.com/Bookofharry/Screeva/releases');
+  // Simulate declining a native launch prompt without activating an installed app.
+  await page.evaluate(() => document.addEventListener('click', event => {
+    if ((event.target as Element).closest('a[href="screeva://open"]')) event.preventDefault();
+  }));
+  await launch.click();
+  await expect(settings.getByRole('status', { name: 'Local studio launch help' })).toContainText('may have cancelled');
+  await expect(settings).toContainText('Enable Screeva links.cmd');
+  await expect(settings.locator('details')).toHaveAttribute('open', '');
   await page.setViewportSize({ width: 375, height: 812 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/hosted-settings.png', fullPage: true });
-  await page.getByRole('button', { name: 'Studio', exact: true }).click();
-  await expect(page.locator('.recording-panel')).toContainText('Quick browser test');
-  await page.getByRole('button', { name: 'Recordings', exact: true }).click();
-  await expect(page.locator('#view-recordings').getByRole('alert')).toContainText('hosted page');
-  await page.evaluate(() => { window.location.hash = '#recovery'; });
-  await expect(page.locator('#view-recovery').getByRole('alert')).toContainText('hosted page');
+  await page.screenshot({ path: 'test-results/hosted-launcher-setup.png', fullPage: true });
+  await settings.getByRole('button', { name: 'Continue in browser' }).click();
+  await expect(page.locator('.recording-panel')).toContainText('Browser recording');
+  await expect(page.getByRole('button', { name: 'Recordings', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Recording options' }).click();
+  await expect(page.getByRole('radio', { name: 'Durable local session' })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  for (const view of ['recordings', 'recovery']) {
+    await page.evaluate(next => { window.location.hash = '#' + next; }, view);
+    await expect(page.locator('#view-' + view)).toContainText('Choose how to record');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  }
   await expect(page.getByText('No unfinished server sessions found')).not.toBeVisible();
   expect(apiRequests).toEqual([]);
   expect(errors).toEqual([]);

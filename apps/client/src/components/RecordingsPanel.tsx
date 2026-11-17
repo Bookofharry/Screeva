@@ -267,7 +267,7 @@ export function RecordingsPanel({ refreshTrigger = 0, recoveryAttentionCount = 0
                 <Icon name="sliders" size={13} />
                 <span>Save to computer · Durable local session</span>
               </span>
-              <span>Open Recording options to confirm <strong>Save to computer</strong> and name your video. Quick browser test remains an explicit temporary alternative.</span>
+              <span>Open Recording options to confirm <strong>Save to computer</strong> and name your video. Browser recording remains an explicit temporary alternative.</span>
             </li>
             <li>
               <div className="how-it-works-grid__top">

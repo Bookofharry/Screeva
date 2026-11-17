@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Capabilities, RecoveryInspection } from '../../../../packages/shared/src/index.js';
-import { checkWriteAccess, loadCapabilities, localServiceConnectionHelp } from '../api.js';
+import { checkWriteAccess, isStaticBrowserHost, loadCapabilities, localServiceConnectionHelp } from '../api.js';
 import { Banner } from '../ui/Banner.js';
 import { Icon } from '../ui/Icon.js';
 import { StatusPill } from '../ui/StatusPill.js';
@@ -23,10 +23,12 @@ import { GuidesPanel } from './GuidesPanel.js';
 import { RecordingsPanel } from './RecordingsPanel.js';
 import { RecoveryPanel } from './RecoveryPanel.js';
 import { SettingsPanel } from './SettingsPanel.js';
-
-const NAV_VIEWS = STUDIO_VIEWS.filter(view => view.id !== 'recovery');
+import { LocalStudioSetup } from './LocalStudioSetup.js';
 
 export function AppShell() {
+  const browserMode = isStaticBrowserHost();
+  const NAV_VIEWS = STUDIO_VIEWS.filter(view => view.id !== 'recovery' && (!browserMode || view.id !== 'recordings'));
+  const [browserNoticeDismissed, setBrowserNoticeDismissed] = useState(false);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
@@ -43,6 +45,7 @@ export function AppShell() {
   const navRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
+    if (browserMode) return;
     const controller = new AbortController();
     setError('');
     void loadCapabilities(AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]))
@@ -53,7 +56,7 @@ export function AppShell() {
         }
       });
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, browserMode]);
 
   useEffect(() => {
     const syncFromLocation = () => {
@@ -131,6 +134,7 @@ export function AppShell() {
   }
 
   const shellStatus = deriveGlobalShellStatus({
+    browserMode,
     capabilities,
     serviceError: error,
     capture: captureSummary,
@@ -241,6 +245,14 @@ export function AppShell() {
         <div className={activeView === 'studio' ? 'view-intro ui-visually-hidden' : 'view-intro view-intro--studio'}>
           <h1>{currentView.heading}</h1>
         </div>
+        {browserMode && activeView === 'studio' && !browserNoticeDismissed && (
+          <div className="shell-alert">
+            <Banner tone="info" title="Record in your browser" action={<button type="button" onClick={() => selectView('settings')}>Get local studio</button>}>
+              Download your WebM before closing this tab. Browser recordings have a 128 MiB memory limit.
+              {' '}<button type="button" className="secondary" onClick={() => setBrowserNoticeDismissed(true)}>Continue in browser</button>
+            </Banner>
+          </div>
+        )}
         {error && activeView !== 'settings' && (
           <div className="shell-alert">
             <Banner
@@ -309,7 +321,7 @@ export function AppShell() {
           aria-label="Recordings workspace"
           hidden={activeView !== 'recordings'}
         >
-          {activeView === 'recordings' && (
+          {activeView === 'recordings' && !browserMode && (
             <RecordingsPanel
               refreshTrigger={recordingsRefresh}
               recoveryAttentionCount={recoverySummary.attentionCount}
@@ -318,6 +330,7 @@ export function AppShell() {
               exportAvailable={capabilities?.export === true}
             />
           )}
+          {activeView === 'recordings' && browserMode && <LocalStudioSetup onContinue={() => selectView('studio')} busy={shellStatus.hasLiveSession} />}
         </div>
         <div
           id="view-recovery"
@@ -326,11 +339,12 @@ export function AppShell() {
           aria-label="Recovery workspace"
           hidden={activeView !== 'recovery'}
         >
-          <RecoveryPanel
+          {!browserMode && <RecoveryPanel
             refreshTrigger={recoveryRefresh}
             onItemsChange={setRecoveryItems}
             onSalvaged={() => setRecordingsRefresh(count => count + 1)}
-          />
+          />}
+          {activeView === 'recovery' && browserMode && <LocalStudioSetup onContinue={() => selectView('studio')} busy={shellStatus.hasLiveSession} />}
         </div>
         <div
           id="view-guides"
@@ -351,14 +365,14 @@ export function AppShell() {
           <div className="settings-grid">
             <div ref={setSettingsPortal} className="settings-grid__studio" />
             <div className="settings-grid__system">
-              <SettingsPanel
+              {browserMode ? <LocalStudioSetup onContinue={() => { setBrowserNoticeDismissed(true); selectView('studio'); }} busy={shellStatus.hasLiveSession} /> : <SettingsPanel
                 capabilities={capabilities}
                 error={error}
                 checking={checking}
                 checkResult={checkResult}
                 onRetryConnection={retryConnection}
                 onRunWriteCheck={() => { void runCheck(); }}
-              />
+              />}
             </div>
           </div>
         </div>

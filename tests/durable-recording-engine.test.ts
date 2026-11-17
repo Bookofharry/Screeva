@@ -201,7 +201,7 @@ test('HTML fallback responses fail start with actionable service guidance instea
     assert.equal(await controller.start(media(new Stream([video])), null, 'Static host', configuration), false);
     const snapshot = controller.getSnapshot();
     assert.equal(snapshot.status, 'failed');
-    assert.match(snapshot.error, /response was not JSON.*loopback.*Quick browser test/i);
+    assert.match(snapshot.error, /response was not JSON.*loopback.*Browser recording/i);
     assert.doesNotMatch(snapshot.error, /Unexpected token/i);
     assert.equal(snapshot.sessionId, '');
     assert.equal(video.stops, 0);

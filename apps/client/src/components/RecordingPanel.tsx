@@ -268,7 +268,7 @@ export function RecordingPanel({
               onClick={() => setOptionsModalOpen(open => !open)}
             >
               <Icon name="sliders" size={14} />
-              <span>{mode === 'durable' ? 'Save to computer' : 'Quick browser test'}</span>
+              <span>{mode === 'durable' ? 'Save to computer' : 'Browser recording'}</span>
             </button>
             {dockActions.startLabel && (
               <button
@@ -298,7 +298,7 @@ export function RecordingPanel({
             <div className="panel-heading scene-modal__header">
               <div className="scene-modal__title-group">
                 <h2 id="recording-options-title">Recording options</h2>
-                <span className="badge">{mode === 'durable' ? 'Save to computer' : 'Quick browser test'}</span>
+                <span className="badge">{mode === 'durable' ? 'Save to computer' : 'Browser recording'}</span>
               </div>
               <button
                 ref={optionsCloseButton}
@@ -312,7 +312,7 @@ export function RecordingPanel({
             </div>
             <div className="recording-modal-body">
               <div className="recording-mode recording-mode--modal" role="radiogroup" aria-label="Save mode">
-                <label className={mode === 'durable' ? 'mode-option mode-option--active' : 'mode-option'}>
+                {durableAvailable && <label className={mode === 'durable' ? 'mode-option mode-option--active' : 'mode-option'}>
                   <input
                     type="radio"
                     name="recording-mode"
@@ -325,7 +325,7 @@ export function RecordingPanel({
                     <strong>Save to computer</strong>
                     <small>Crash-safe local session saved in Recordings</small>
                   </span>
-                </label>
+                </label>}
                 <label className={mode === 'temporary' ? 'mode-option mode-option--active' : 'mode-option'}>
                   <input
                     type="radio"
@@ -336,7 +336,7 @@ export function RecordingPanel({
                     onChange={() => selectMode('temporary')}
                   />
                   <span>
-                    <strong>Quick browser test</strong>
+                    <strong>Browser recording</strong>
                     <small>Instant in-browser preview &amp; WebM download</small>
                   </span>
                 </label>
@@ -391,7 +391,7 @@ export function RecordingPanel({
         )}
         {mode === 'durable' && !durableAvailable && !active && (
           <Banner tone="warning" title="Local saving is unavailable">
-            Start the local service or choose Quick browser test. No durable session will be created while offline.
+            Start the local service or choose Browser recording. No durable session will be created while offline.
           </Banner>
         )}
         {mode === 'durable' && durableState.status === 'retrying' && (

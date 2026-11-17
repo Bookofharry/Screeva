@@ -12,7 +12,7 @@ Open the live browser studio directly — no downloads, no terminal, and no inst
 
 Works in Chrome, Edge, Brave, or Arc on **macOS**, **Windows**, and **Linux** (screen sharing, webcam, microphone, PIP/Split scene compositor, audio mixer, and instant `.webm` video recording + download).
 
-**The hosted studio supports temporary browser recording only.** Use **Quick browser test** for short clips and download the WebM before closing or reloading the tab (128 MiB memory limit). GitHub Pages cannot run Screeva's local API, durable storage, recovery or FFmpeg export. For those features, start the local app using the instructions below and open its printed address, normally **http://127.0.0.1:4317**. Retrying the hosted page cannot connect it to the local app.
+**Web mode needs no installation.** Choose **Browser recording**, then download your WebM before closing or reloading the tab (128 MiB memory limit). The optional **Get local studio** setup offers durable storage, recovery and local MP4 export in a separately opened local app.
 
 ---
 
@@ -20,11 +20,16 @@ Works in Chrome, Edge, Brave, or Arc on **macOS**, **Windows**, and **Linux** (s
 
 If you just want to run **Screeva** without installing Node.js or building from source, download the latest prebuilt release from [**GitHub Releases**](https://github.com/Bookofharry/Screeva/releases/latest):
 
-- **macOS (Apple Silicon):** Download **`Screeva-macOS-arm64.dmg`** (or **`Screeva-macOS-arm64.zip`**), open it, and double-click **`Screeva.app`** (or **`Start Screeva.command`**).
-  - *macOS Gatekeeper tip:* Because this open-source build is not notarized with a paid Apple Developer ID yet, on first launch **Right-click (Control-click) `Screeva.app` → Open**, or run `xattr -cr Screeva.app` in Terminal.
-- **Windows (64-bit):** Download **`Screeva-Windows-x64.zip`**, extract the `Screeva` folder anywhere, and double-click **`Start Screeva.cmd`**.
+- **macOS (Apple Silicon):** Move **`Screeva.app`** from the DMG/ZIP into Applications and open it once. Follow macOS's normal app-opening prompts; these bundles are ad-hoc signed, not notarized. Allow opening Terminal when macOS asks.
+- **Windows (64-bit):** Extract **`Screeva-Windows-x64.zip`** to a permanent writable folder. Double-click **`Enable Screeva links.cmd`** once to register the launch link for your Windows account. No administrator access is required. **`Start Screeva.cmd`** also launches directly.
 
 Both bundles include an embedded Node.js 24 runtime and automatically launch the studio at **http://127.0.0.1:4317** in your browser (Chrome, Edge, Brave, or Arc recommended).
+
+With a launcher-enabled release installed, choose **Get local studio → Open local studio** on the website and accept the browser prompt. Older bundles need updating. If nothing opens, complete setup or launch directly. Cancelling leaves Web mode available; the website does not detect installed software or probe localhost.
+
+The launcher starts or reuses the local service and opens the studio only after a valid readiness response. Keep the launcher/Terminal window open while recording. Stop recording before pressing **Ctrl+C** there to stop the service. Closing the browser does not stop it. The launcher never opens camera/microphone streams or transfers temporary browser recordings into local storage.
+
+**FFmpeg and FFprobe are not bundled:** install a trusted distribution and make both tools available on PATH for durable finalization, recovery and MP4 export. Windows portable recordings remain in the extracted folder's `data/`; macOS recordings remain in `~/Library/Application Support/Screeva/data` across app updates. See the bundled `SETUP.txt` for setup, moving a Windows bundle, and removing its per-user launch-link registration.
 
 ---
 

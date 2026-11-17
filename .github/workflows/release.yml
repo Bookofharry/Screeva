@@ -7,9 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to publish (e.g. v0.1.0)'
-        required: false
-        default: 'v0.1.0'
+        description: 'New release tag to publish (e.g. v0.1.1)'
+        required: true
 
 permissions:
   contents: write
@@ -28,6 +27,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - run: node --import tsx --test tests/launcher.test.ts
       - run: npm prune --omit=dev
       - name: Assemble Screeva.app and macOS DMG/ZIP
         run: |
@@ -37,100 +37,25 @@ jobs:
           CONTENTS="$APP_BUNDLE/Contents"
           APP_ROOT="$CONTENTS/Resources/app"
 
-          mkdir -p "$CONTENTS/MacOS" "$APP_ROOT/apps/client" "$APP_ROOT/runtime" "$APP_ROOT/data"
-
+          mkdir -p "$STAGE"
+          osacompile -o "$APP_BUNDLE" packaging/macos/Screeva.applescript
+          mkdir -p "$APP_ROOT/apps/client" "$APP_ROOT/runtime"
           cp package.json LICENSE README.md "$APP_ROOT/"
           cp -R apps/client/dist "$APP_ROOT/apps/client/dist"
           cp -R dist "$APP_ROOT/dist"
           cp -R node_modules "$APP_ROOT/node_modules"
           cp "$(command -v node)" "$APP_ROOT/runtime/node"
           chmod +x "$APP_ROOT/runtime/node"
+          cp packaging/README.txt "$STAGE/SETUP.txt"
 
-          cat > "$CONTENTS/Info.plist" << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleName</key>
-            <string>Screeva</string>
-            <key>CFBundleDisplayName</key>
-            <string>Screeva</string>
-            <key>CFBundleIdentifier</key>
-            <string>app.screeva.studio</string>
-            <key>CFBundleVersion</key>
-            <string>0.1.0</string>
-            <key>CFBundleShortVersionString</key>
-            <string>0.1.0</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>CFBundleExecutable</key>
-            <string>Screeva</string>
-            <key>NSHighResolutionCapable</key>
-            <true/>
-          </dict>
-          </plist>
-          EOF
-
-          cat > "$CONTENTS/MacOS/Screeva" << 'EOF'
-          #!/bin/bash
-          set -e
-          CONTENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-          BUNDLE_APP_DIR="$CONTENTS_DIR/Resources/app"
-          USER_APP_DIR="$HOME/Library/Application Support/Screeva"
-          PORT="${PORT:-4317}"
-          URL="http://127.0.0.1:${PORT}"
-
-          if curl -fsS "${URL}/api/v1/capabilities" >/dev/null 2>&1; then
-            open "${URL}"
-            exit 0
-          fi
-
-          mkdir -p "$USER_APP_DIR/data"
-          rsync -a --delete --exclude 'data' "$BUNDLE_APP_DIR/" "$USER_APP_DIR/"
-          chmod +x "$USER_APP_DIR/runtime/node"
-          cd "$USER_APP_DIR"
-          "$USER_APP_DIR/runtime/node" "$USER_APP_DIR/dist/apps/server/src/index.js" >"$USER_APP_DIR/server.log" 2>&1 &
-          SERVER_PID=$!
-
-          for _ in {1..40}; do
-            if curl -fsS "${URL}/api/v1/capabilities" >/dev/null 2>&1; then
-              open "${URL}"
-              break
-            fi
-            sleep 0.15
-          done
-
-          wait "$SERVER_PID"
-          EOF
-          chmod +x "$CONTENTS/MacOS/Screeva"
-
-          cat > "$STAGE/Start Screeva.command" << 'EOF'
-          #!/bin/bash
-          DIR="$(cd "$(dirname "$0")" && pwd)"
-          exec "$DIR/Screeva.app/Contents/MacOS/Screeva"
-          EOF
-          chmod +x "$STAGE/Start Screeva.command"
-
-          cat > "$STAGE/Stop Screeva.command" << 'EOF'
-          #!/bin/bash
-          pkill -f "Resources/app/dist/apps/server/src/index.js" || true
-          echo "Screeva local server stopped."
-          EOF
-          chmod +x "$STAGE/Stop Screeva.command"
-
-          cat > "$STAGE/README-MAC.txt" << 'EOF'
-          Screeva — Your Screen. Your Studio. (macOS Standalone Bundle)
-          =============================================================
-
-          1. Move the "Screeva" folder (or Screeva.app) to a writable folder such as Downloads, Desktop, or ~/Applications.
-          2. Double-click "Screeva.app" (or "Start Screeva.command").
-             - If macOS Gatekeeper warns that the app is from an unidentified developer:
-               Right-click (Control-click) "Screeva.app" -> click "Open", OR run in Terminal:
-               xattr -cr Screeva.app
-          3. Screeva will start its local loopback server and open http://127.0.0.1:4317 in your browser.
-          4. No Node.js installation is required (Node 24 is bundled inside Screeva.app).
-          5. Optional: Install FFmpeg (`brew install ffmpeg`) if you want durable Save-to-computer finalization and crash salvage.
-          EOF
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier app.screeva.studio" "$CONTENTS/Info.plist" || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string app.screeva.studio" "$CONTENTS/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName Screeva" "$CONTENTS/Info.plist" || /usr/libexec/PlistBuddy -c "Add :CFBundleName string Screeva" "$CONTENTS/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$CONTENTS/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$CONTENTS/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string app.screeva.studio" "$CONTENTS/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$CONTENTS/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string screeva" "$CONTENTS/Info.plist"
+          plutil -lint "$CONTENTS/Info.plist"
 
           codesign --force --deep --sign - "$APP_BUNDLE"
           ditto -c -k --sequesterRsrc --keepParent "$STAGE" Screeva-macOS-arm64.zip
@@ -155,6 +80,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+      - run: node --import tsx --test tests/launcher.test.ts
       - run: npm prune --omit=dev
       - name: Assemble Windows standalone bundle
         shell: pwsh
@@ -168,26 +94,8 @@ jobs:
           Copy-Item -Recurse node_modules "$Stage/node_modules"
           Copy-Item (Get-Command node).Source "$Stage/runtime/node.exe"
 
-          @'
-          @echo off
-          setlocal
-          cd /d "%~dp0"
-          if not exist "data" mkdir "data"
-          echo Starting Screeva on http://127.0.0.1:4317 ...
-          start "" "http://127.0.0.1:4317"
-          "%~dp0runtime\node.exe" "%~dp0dist\apps\server\src\index.js"
-          pause
-          '@ | Set-Content -Path "$Stage/Start Screeva.cmd" -Encoding ASCII
-
-          @'
-          Screeva — Your Screen. Your Studio. (Windows Standalone Bundle)
-          ===============================================================
-
-          1. Extract the "Screeva" folder anywhere on your computer.
-          2. Double-click "Start Screeva.cmd".
-          3. Your browser will open http://127.0.0.1:4317 automatically.
-          4. Close the command window (or press Ctrl+C) when finished.
-          '@ | Set-Content -Path "$Stage/README-WINDOWS.txt" -Encoding UTF8
+          Copy-Item 'packaging/windows/*.cmd' -Destination $Stage
+          Copy-Item packaging/README.txt "$Stage/SETUP.txt"
 
           Compress-Archive -Path $Stage -DestinationPath Screeva-Windows-x64.zip -Force
       - uses: actions/upload-artifact@v4
@@ -206,32 +114,35 @@ jobs:
           merge-multiple: true
       - name: Determine release tag
         id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            echo "tag_name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            RELEASE_TAG="$REF_NAME"
           else
-            echo "tag_name=${{ inputs.tag || 'v0.1.0' }}" >> "$GITHUB_OUTPUT"
+            RELEASE_TAG="$INPUT_TAG"
           fi
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Expected a version tag such as v0.1.1"; exit 1; }
+          echo "tag_name=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
           name: "Screeva ${{ steps.tag.outputs.tag_name }} — macOS & Windows Standalone Studio"
           body: |
             ## Screeva (`screeva.`) — Your Screen. Your Studio.
 
             Prebuilt standalone bundles for **macOS** and **Windows** (includes an embedded Node.js 24 runtime — no developer tools or `npm install` required).
 
-            ### macOS (`Screeva-macOS-arm64.dmg` / `Screeva-macOS-arm64.zip`)
-            1. Download **`Screeva-macOS-arm64.dmg`** (or `.zip`), extract/copy the **`Screeva`** folder to `Downloads`, `Desktop`, or `~/Applications`.
-            2. Double-click **`Screeva.app`** (or **`Start Screeva.command`**).
-               - *First-launch note on macOS:* Right-click (`Control`-click) `Screeva.app` → **Open**, or run `xattr -cr Screeva.app` in Terminal.
-            3. Screeva starts its local loopback server and opens **http://127.0.0.1:4317** in your browser.
-
-            ### Windows (`Screeva-Windows-x64.zip`)
-            1. Download and extract **`Screeva-Windows-x64.zip`**.
-            2. Double-click **`Start Screeva.cmd`**.
-            3. Your browser opens **http://127.0.0.1:4317** automatically.
+            ### One-time setup
+            - **Windows:** Extract the ZIP to a permanent folder and run **Enable Screeva links.cmd** once. **Start Screeva.cmd** also launches directly.
+            - **macOS Apple Silicon:** Move **Screeva.app** into Applications and open it once. Follow the normal macOS approval prompts; this build is not notarized.
+            - On the website choose **Open local studio** and accept your browser's prompt. Older bundles need updating for this feature.
+            - Keep the launcher/Terminal window open while recording. Stop recording before pressing Ctrl+C to stop the service.
+            - FFmpeg and FFprobe remain separately installed prerequisites for durable finalization, recovery and MP4 export. See the included SETUP.txt.
           files: |
             artifacts/Screeva-macOS-arm64.dmg
             artifacts/Screeva-macOS-arm64.zip

@@ -123,6 +123,7 @@ Use opaque IDs; never accept arbitrary client filesystem paths. SQLite contains 
 | GET | `/api/v1/exports/:id/file` | Download exported MP4 |
 
 ## 9. UX / screen map
+- **Hosted/local entry:** Hosted use is normal Web mode with temporary WebM download and explicit memory/tab-lifetime limits. Optional local setup offers a download and a user-initiated `screeva://open` link for an installed Windows/macOS launcher. The launcher starts or reuses the local service and opens its studio after readiness; no automatic installation, capture, media transfer or localhost access from the hosted page. FFmpeg/FFprobe remain separately installed prerequisites.
 - **Home:** New recording, recent sessions, storage usage.
 - **Setup:** Screen source prompt, camera/mic selectors, test meter, resolution, layout preset.
 - **Recording studio:** Unified preview, movable webcam, face tracking toggle, focus region controls, elapsed time, pause/stop, loss warnings.
