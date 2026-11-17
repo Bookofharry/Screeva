@@ -34,7 +34,7 @@ export function SettingsPanel({
         </div>
         <div className="workspace-metric">
           <dt>Recording</dt>
-          <dd>Temporary + durable WebM</dd>
+          <dd>{!error && capabilities?.recording ? 'Temporary + durable WebM' : 'Temporary WebM only · durable storage unavailable'}</dd>
         </div>
         <div className="workspace-metric">
           <dt>MP4 export</dt>

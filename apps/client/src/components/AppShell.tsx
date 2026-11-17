@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Capabilities, RecoveryInspection } from '../../../../packages/shared/src/index.js';
-import { checkWriteAccess, loadCapabilities } from '../api.js';
+import { checkWriteAccess, loadCapabilities, localServiceConnectionHelp } from '../api.js';
 import { Banner } from '../ui/Banner.js';
 import { Icon } from '../ui/Icon.js';
 import { StatusPill } from '../ui/StatusPill.js';
@@ -49,7 +49,7 @@ export function AppShell() {
       .then(setCapabilities)
       .catch(() => {
         if (!controller.signal.aborted) {
-          setError('Cannot reach the local service. Check that the server is running, then retry.');
+          setError(localServiceConnectionHelp());
         }
       });
     return () => controller.abort();

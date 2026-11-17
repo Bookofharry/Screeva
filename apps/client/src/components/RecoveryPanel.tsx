@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RecoveryInspection } from '../../../../packages/shared/src/index.js';
-import { isStaticBrowserHost } from '../api.js';
+import { isStaticBrowserHost, localServiceConnectionHelp } from '../api.js';
 import { RecoveryClient } from '../media/recovery-client.js';
 import { formatBytes } from '../media/recording-engine.js';
 import { Icon } from '../ui/Icon.js';
@@ -34,6 +34,7 @@ export function RecoveryPanel({ refreshTrigger = 0, onItemsChange, onSalvaged }:
       if (mounted.current && generation === refreshGeneration.current) {
         setItems([]);
         onItemsChangeRef.current?.([]);
+        setError(localServiceConnectionHelp());
         setLoading(false);
       }
       return;
@@ -107,7 +108,7 @@ export function RecoveryPanel({ refreshTrigger = 0, onItemsChange, onSalvaged }:
         </button>
       </div>
       {loading && <p className="setup-help" role="status">Checking for interrupted recordings…</p>}
-      {!loading && !items.length && (
+      {!loading && !error && !items.length && (
         <div className="empty-state" role="status">
           <span className="empty-state__icon empty-state__icon--ok" aria-hidden="true">
             <Icon name="check" size={22} />

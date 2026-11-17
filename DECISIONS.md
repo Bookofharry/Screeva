@@ -319,6 +319,8 @@
 
 **Consequences:** Static deployments and misconfigured proxies no longer claim durable persistence, and raw parser exceptions are not shown to users. A working same-origin loopback server remains unchanged and continues to pass authenticated end-to-end recording. Hosted previews visibly report the local service unavailable and offer temporary recording; connecting a separately hosted frontend to localhost would require a future explicit, security-reviewed origin/transport design rather than a fabricated capability.
 
+**2026-11-17 clarification:** Hosted API-client calls now fail before fetch, because a non-loopback static host cannot supply this application's local service. Connection guidance distinguishes temporary browser recording from opening the separately started local app. Settings and Recovery must not advertise durable availability or verified empty storage without successful local-service evidence. Loopback requests still require schema-valid JSON and the existing server authorization checks; this UI guard is not a replacement security boundary.
+
 ## ADR-036 — Baseline MP4 export is a single internal worker over an immutable finalized source
 **Status:** Accepted.
 

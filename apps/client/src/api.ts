@@ -12,6 +12,7 @@ import {
 import { readJsonResponse } from './api-response.js';
 
 async function request<T extends z.ZodType>(url: string, schema: T, init: RequestInit = {}): Promise<z.output<T>> {
+  if (isStaticBrowserHost()) throw new Error(localServiceConnectionHelp());
   const response = await fetch(url, { ...init, cache: 'no-store', credentials: 'same-origin', signal: init.signal ?? AbortSignal.timeout(10_000) });
   const body = await readJsonResponse(response, 'The local service returned an invalid response.');
   const result = responseSchema(z.unknown()).parse(body);
@@ -24,6 +25,13 @@ export function isStaticBrowserHost(): boolean {
   if (typeof window === 'undefined') return false;
   const host = window.location.hostname;
   return Boolean(host) && host !== '127.0.0.1' && host !== 'localhost' && host !== '[::1]' && host !== '::1';
+}
+
+export function localServiceConnectionHelp(): string {
+  const nextStep = 'Start the local Screeva app and open the address it prints (normally http://127.0.0.1:4317) for durable storage and MP4 export. Or use Quick browser test in Studio for short, temporary WebM recordings; download before closing the tab.';
+  return isStaticBrowserHost()
+    ? `This hosted page supports browser-only recording. Its host does not provide the local Screeva API, and Retry connection cannot connect this page to your computer. ${nextStep}`
+    : `Cannot reach the local service. Check that the server is running, then retry. ${nextStep}`;
 }
 
 export function loadCapabilities(signal?: AbortSignal) {

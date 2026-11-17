@@ -32,6 +32,7 @@ test('foundation status and authenticated check work without external requests o
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('Ready · SQLite')).toBeVisible();
+  await expect(page.getByText('Temporary + durable WebM', { exact: true })).toBeVisible();
   await expect(page.getByText('Ready · Local FFmpeg', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Check local access' }).click();
   await expect(page.getByRole('status', { name: 'Local access check' })).toContainText('Local access verified');
@@ -55,6 +56,45 @@ test('HTML API fallback is reported offline without exposing a JSON parser error
   await expect(page.getByRole('alert').filter({ hasText: 'Cannot reach the local service. Check that the server is running, then retry.' }).first()).toBeVisible();
   await expect(page.locator('.recording-panel')).toContainText('Quick browser test');
   expect(errors.some(message => message.includes("Unexpected token '<'"))).toBe(false);
+});
+
+test('hosted studio explains browser-only recording without requesting a remote API', async ({ page, request }) => {
+  const apiRequests: string[] = [];
+  const errors: string[] = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname.includes('/api/')) apiRequests.push(request.url());
+  });
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => {
+    const forbiddenCapture = () => { throw new Error('Unexpected media capture on hosted page'); };
+    navigator.mediaDevices.getUserMedia = forbiddenCapture;
+    navigator.mediaDevices.getDisplayMedia = forbiddenCapture;
+  });
+  // Serve the built UI under a hosted origin without contacting a public website.
+  await page.route('https://studio.example/**', async route => {
+    const url = new URL(route.request().url());
+    const response = await request.get(`http://127.0.0.1:4318${url.pathname === '/Screeva/' ? '/' : url.pathname}`);
+    await route.fulfill({ response });
+  });
+  await page.goto('https://studio.example/Screeva/#settings');
+  const settings = page.getByRole('region', { name: 'Settings workspace' });
+  await expect(settings.getByRole('alert')).toContainText('This hosted page supports browser-only recording');
+  await expect(settings.getByRole('alert')).toContainText('http://127.0.0.1:4317');
+  await expect(settings.getByText('Temporary WebM only · durable storage unavailable', { exact: true })).toBeVisible();
+  await settings.getByRole('button', { name: 'Retry connection' }).click();
+  await expect(settings.getByRole('alert')).toContainText('Retry connection cannot connect this page to your computer');
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/hosted-settings.png', fullPage: true });
+  await page.getByRole('button', { name: 'Studio', exact: true }).click();
+  await expect(page.locator('.recording-panel')).toContainText('Quick browser test');
+  await page.getByRole('button', { name: 'Recordings', exact: true }).click();
+  await expect(page.locator('#view-recordings').getByRole('alert')).toContainText('hosted page');
+  await page.evaluate(() => { window.location.hash = '#recovery'; });
+  await expect(page.locator('#view-recovery').getByRole('alert')).toContainText('hosted page');
+  await expect(page.getByText('No unfinished server sessions found')).not.toBeVisible();
+  expect(apiRequests).toEqual([]);
+  expect(errors).toEqual([]);
 });
 
 test('same-origin browser can create, list and retrieve persistent session metadata', async ({ page }) => {
@@ -107,6 +147,7 @@ test('connection failure is visible and retry recovers', async ({ page }) => {
   await page.route('**/api/v1/capabilities', route => route.abort());
   await page.goto('/');
   await expect(page.getByRole('alert')).toContainText('Cannot reach the local service');
+  await expect(page.getByRole('alert')).toContainText('http://127.0.0.1:4317');
   await page.unroute('**/api/v1/capabilities');
   await page.getByRole('button', { name: 'Retry connection' }).click();
   await expect(page.getByText('Connected', { exact: true })).toBeVisible();

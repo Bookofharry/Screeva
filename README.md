@@ -12,6 +12,8 @@ Open the live browser studio directly — no downloads, no terminal, and no inst
 
 Works in Chrome, Edge, Brave, or Arc on **macOS**, **Windows**, and **Linux** (screen sharing, webcam, microphone, PIP/Split scene compositor, audio mixer, and instant `.webm` video recording + download).
 
+**The hosted studio supports temporary browser recording only.** Use **Quick browser test** for short clips and download the WebM before closing or reloading the tab (128 MiB memory limit). GitHub Pages cannot run Screeva's local API, durable storage, recovery or FFmpeg export. For those features, start the local app using the instructions below and open its printed address, normally **http://127.0.0.1:4317**. Retrying the hosted page cannot connect it to the local app.
+
 ---
 
 ## Download prebuilt app (macOS & Windows — no Node.js required)
